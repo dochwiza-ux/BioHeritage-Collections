@@ -2,8 +2,8 @@ import os
 from pathlib import Path
 
 # Configuration
-site_title = "BioHeritage Collections"
-site_description = "A virtual museum of biodiversity"
+site_title = "Insect Macro Photography"
+site_description = "A collection of macro insect photographs"
 
 # Get all image files
 images = []
