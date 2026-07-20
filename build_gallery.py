@@ -3,7 +3,7 @@ from pathlib import Path
 
 # Configuration
 site_title = "BioHeritage Collections"
-site_description = "A virtual museum of biodiversity"
+site_description = "Macro photography exploring the intricate world of insects"
 
 # Get all image files
 images = []
@@ -16,7 +16,7 @@ for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']:
                 'name': file.stem
             })
 
-# Generate HTML
+# Generate HTML with zoom functionality
 html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -31,8 +31,57 @@ html = f"""<!DOCTYPE html>
         .album {{ margin-bottom: 60px; }}
         .album h2 {{ color: #eee; font-weight: 300; padding-bottom: 10px; border-bottom: 1px solid #333; margin-bottom: 20px; }}
         .gallery {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; }}
-        .gallery img {{ width: 100%; height: 250px; object-fit: cover; border-radius: 8px; transition: transform 0.3s; cursor: pointer; }}
+        .gallery img {{ width: 100%; height: 250px; object-fit: cover; border-radius: 8px; transition: transform 0.3s; cursor: zoom-in; }}
         .gallery img:hover {{ transform: scale(1.03); }}
+        
+        /* Lightbox with zoom/pan */
+        .lightbox {{ 
+            display: none; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.95); 
+            z-index: 999; 
+            cursor: zoom-out;
+            align-items: center; 
+            justify-content: center;
+            overflow: hidden;
+        }}
+        .lightbox.active {{ display: flex; }}
+        .lightbox img {{ 
+            max-width: 90%; 
+            max-height: 90%; 
+            object-fit: contain;
+            transition: transform 0.2s ease;
+            cursor: grab;
+        }}
+        .lightbox img:active {{ cursor: grabbing; }}
+        .lightbox .close-btn {{
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            font-size: 40px;
+            color: #fff;
+            cursor: pointer;
+            z-index: 1000;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }}
+        .lightbox .close-btn:hover {{ opacity: 1; }}
+        .lightbox .zoom-info {{
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 14px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 16px;
+            border-radius: 20px;
+            user-select: none;
+        }}
         .footer {{ text-align: center; color: #555; padding: 40px 0 20px; font-size: 14px; }}
     </style>
 </head>
@@ -52,16 +101,102 @@ for img in images:
 for album, photos in albums.items():
     html += f'<div class="album"><h2>{album}</h2><div class="gallery">'
     for photo in photos:
-        html += f'<img src="{photo["filename"]}" alt="{photo["name"]}" loading="lazy">'
+        html += f'<img src="{photo["filename"]}" alt="{photo["name"]}" loading="lazy" onclick="openLightbox(this.src)">'
     html += '</div></div>'
 
 html += """
-    <div class="footer">© 2026 • All rights reserved</div>
+    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+        <span class="close-btn" onclick="closeLightbox()">&times;</span>
+        <img id="lightbox-img" src="" alt="Zoomed view">
+        <div class="zoom-info">Scroll to zoom • Drag to pan</div>
+    </div>
+    <div class="footer">© 2026 • BioHeritage Collections • All rights reserved</div>
+
+    <script>
+        let scale = 1;
+        let posX = 0;
+        let posY = 0;
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightbox-img');
+
+        function openLightbox(src) {
+            lightboxImg.src = src;
+            lightbox.classList.add('active');
+            scale = 1;
+            posX = 0;
+            posY = 0;
+            updateTransform();
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeLightbox() {
+            lightbox.classList.remove('active');
+            document.body.style.overflow = '';
+            scale = 1;
+            posX = 0;
+            posY = 0;
+            updateTransform();
+        }
+
+        function updateTransform() {
+            lightboxImg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        }
+
+        // Zoom with mouse wheel
+        lightbox.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            if (!lightbox.classList.contains('active')) return;
+            
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            scale = Math.min(Math.max(scale + delta, 0.5), 5);
+            updateTransform();
+        });
+
+        // Pan with drag
+        lightboxImg.addEventListener('mousedown', function(e) {
+            if (!lightbox.classList.contains('active')) return;
+            isDragging = true;
+            startX = e.clientX - posX;
+            startY = e.clientY - posY;
+            lightboxImg.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+            posX = e.clientX - startX;
+            posY = e.clientY - startY;
+            updateTransform();
+        });
+
+        window.addEventListener('mouseup', function() {
+            isDragging = false;
+            if (lightboxImg) lightboxImg.style.cursor = 'grab';
+        });
+
+        // Close with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeLightbox();
+        });
+
+        // Reset zoom with double-click
+        lightboxImg.addEventListener('dblclick', function() {
+            scale = 1;
+            posX = 0;
+            posY = 0;
+            updateTransform();
+        });
+    </script>
 </body>
 </html>
 """
 
+# Write the HTML file
 with open('index.html', 'w') as f:
     f.write(html)
 
 print(f"Generated index.html with {len(images)} images in {len(albums)} albums")
+print("Zoom & pan functionality added! Click images to zoom, scroll to zoom in/out, drag to pan.")
