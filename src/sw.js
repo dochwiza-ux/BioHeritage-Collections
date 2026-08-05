@@ -1,4 +1,4 @@
-const CACHE = "bhc-field-shell-v17";
+const CACHE = "bhc-field-shell-v18";
 const SHELL = ["/", "/index.html", "/app.css", "/app.js", "/db.js", "/manifest.webmanifest", "/logo.png", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

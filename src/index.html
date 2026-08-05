@@ -38,7 +38,7 @@
             <span class="status-dot" id="sidebar-dot"></span>
             <div><strong id="sidebar-status">Checking connection</strong><small id="sidebar-detail">Your work stays on this device</small></div>
           </div>
-          <p>Bio-Heritage Collections v1.7.0<br>Secure Cloud archive edition</p>
+          <p>Bio-Heritage Collections v1.8.0<br>Secure Cloud archive edition</p>
         </div>
       </aside>
 
@@ -113,9 +113,13 @@
                     <label>Catalog number *<input name="catalogNumber" id="catalog-number" required readonly placeholder="Assigned automatically"></label>
                     <label>Identification status *<select name="identificationStatus" required><option>Identification Pending</option><option>Provisional</option><option>Verified</option><option>Unidentified</option></select></label>
                     <label>Scientific name<input name="scientificName" id="scientific-name" autocomplete="off" placeholder="Genus species"></label>
+                    <label>Scientific-name authorship<input name="scientificNameAuthorship" autocomplete="off" placeholder="e.g. Linnaeus, 1758"></label>
                     <label>Common name<input name="commonName" id="common-name" autocomplete="off"></label>
                     <label>Order<input name="order" autocomplete="off"></label>
                     <label>Family<input name="family" autocomplete="off"></label>
+                    <label>Identified by<input name="identifiedBy" autocomplete="name"></label>
+                    <label>Date identified<input name="dateIdentified" type="date"></label>
+                    <label class="span-2">Identification remarks<textarea name="identificationRemarks" rows="2" placeholder="Characters used, confidence or source consulted"></textarea></label>
                   </div>
                   <p class="field-note">Provide either a scientific name or a common name.</p>
                 </section>
@@ -156,6 +160,9 @@
                     <label>Life stage<select name="lifeStage"><option value="">Not recorded</option><option>Egg</option><option>Larva</option><option>Nymph</option><option>Pupa</option><option>Adult</option><option>Unknown</option></select></label>
                     <label>Wings / elytra status<select name="wingCondition" id="wing-condition"><option value="">Not assessed</option><option value="wings-present">Wings present</option><option value="elytra-present">Elytra present</option><option value="wingless">Naturally wingless / apterous</option><option value="lost-damaged">Lost, damaged or obscured</option><option value="not-applicable">Not applicable to this life stage</option></select></label>
                     <label>Condition<select name="condition"><option value="">Not recorded</option><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option><option>Damaged</option></select></label>
+                    <label>Repository<input name="institutionName" value="Bio-Heritage Collections"></label>
+                    <label>Institution code<input name="institutionCode" value="BHC"></label>
+                    <label>Collection code<input name="collectionCode" value="BHC Entomology"></label>
                     <label>Notes<textarea name="notes" rows="3"></textarea></label>
                   </div>
                 </section>
@@ -180,6 +187,10 @@
                         <label>Magnification<input id="supplemental-magnification" placeholder="e.g. 1× or 5×"></label>
                         <label>Stack frames<input id="supplemental-stack-frames" type="number" min="1" step="1"></label>
                         <label>Step size (µm)<input id="supplemental-step-microns" type="number" min="0" step="any"></label>
+                        <label>Stacking software<input id="supplemental-stacking-software" placeholder="e.g. Helicon Focus"></label>
+                        <label>ISO<input id="supplemental-iso" inputmode="numeric" placeholder="e.g. 100"></label>
+                        <label>Aperture<input id="supplemental-aperture" placeholder="e.g. f/8"></label>
+                        <label>Shutter speed<input id="supplemental-shutter-speed" placeholder="e.g. 1/200 s"></label>
                         <label>Lighting<input id="supplemental-lighting" placeholder="Lighting used for this image"></label>
                         <label>Photographer<input id="supplemental-photographer" autocomplete="name"></label>
                         <label>Capture date<input id="supplemental-capture-date" type="date"></label>
@@ -188,6 +199,21 @@
                       </div>
                     </details>
                     <label class="drop-zone supplemental" for="media-files"><input id="media-files" type="file" accept="image/*,.tif,.tiff,.dng,.nef,.cr2,.arw" multiple><span class="drop-icon">+</span><strong>Add an additional image</strong><small>For labels, scales or another useful view · up to 100 MB each</small></label>
+                  </div>
+                </section>
+
+                <section class="form-section span-2 publication-metadata-section">
+                  <div class="section-number">06</div><div class="section-title"><h2>Public record and rights</h2><p>Control what visitors may see and how the specimen and photographs should be credited.</p></div>
+                  <div class="fields three-col publication-metadata-fields">
+                    <label>Public locality treatment *<select name="localityPrivacy" id="locality-privacy" required><option value="generalized" selected>Generalized - public wording only</option><option value="withheld">Withheld - state and country only</option><option value="open">Open - publish the recorded locality and coordinates</option></select></label>
+                    <label>Public locality wording<input name="publicLocality" id="public-locality" placeholder="e.g. Harare Province, Zimbabwe"></label>
+                    <label>Reason for restriction<input name="sensitiveLocalityReason" placeholder="Threatened species, private land, vulnerable site"></label>
+                    <label>Rights holder<input name="rightsHolder" value="Bio-Heritage Collections"></label>
+                    <label>Record-data licence<select name="recordLicense"><option value="All rights reserved" selected>All rights reserved</option><option value="CC BY 4.0">CC BY 4.0</option><option value="CC BY-NC 4.0">CC BY-NC 4.0</option></select></label>
+                    <label>Default image credit<input name="imageCredit" value="Tate / Bio-Heritage Collections"></label>
+                    <label>Default image licence<select name="imageLicense"><option value="All rights reserved" selected>All rights reserved</option><option value="CC BY 4.0">CC BY 4.0</option><option value="CC BY-NC 4.0">CC BY-NC 4.0</option></select></label>
+                    <label class="span-2">Preferred citation<textarea name="preferredCitation" rows="2" placeholder="Leave blank to generate a citation from the catalogue number and specimen name"></textarea></label>
+                    <p class="field-note span-2">Exact coordinates remain in the protected manager archive. They enter the public API only when <strong>Open</strong> is deliberately selected.</p>
                   </div>
                 </section>
               </div>
@@ -223,6 +249,10 @@
               <div><p class="eyebrow">Research image requests</p><h2 id="photo-request-title">Need a specific picture or viewing angle?</h2><p>Visitors are welcome to contact Tate with the specimen name, catalogue number and the view required.</p></div>
               <a class="button request-button" href="mailto:dochwiza@gmail.com?subject=BHC%20research%20photograph%20request&amp;body=Specimen%20name%20or%20catalogue%20number%3A%0D%0ARequested%20picture%20or%20viewing%20angle%3A%0D%0A">Email dochwiza@gmail.com</a>
             </aside>
+            <section class="collection-policy" aria-labelledby="collection-policy-title">
+              <div><p class="eyebrow">Responsible research use</p><h2 id="collection-policy-title">Cite the record. Credit the image. Protect the locality.</h2></div>
+              <p>Every published specimen states its preferred citation and reuse terms. Photograph credit and licence are recorded per image where supplied. Exact locality data may be generalized or withheld to protect vulnerable species, private land and collecting sites.</p>
+            </section>
             <div id="catalogue-grid" class="catalogue-grid"></div>
             <div id="catalogue-empty" class="catalogue-empty"><strong>No public records yet.</strong><span>Records appear here after review and publication.</span></div>
           </section>

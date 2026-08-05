@@ -121,16 +121,49 @@ async function ensureSchema(env) {
 
 function normalizeRecord(input) {
   const now = new Date().toISOString();
+  const localityPrivacy = ["open", "generalized", "withheld"].includes(input.localityPrivacy) ? input.localityPrivacy : "withheld";
   return {
     ...input,
     id: String(input.id || ""),
     entityType: "specimen",
     publicationStatus: ["draft", "ready", "published", "withheld"].includes(input.publicationStatus) ? input.publicationStatus : "draft",
+    localityPrivacy,
+    rightsHolder: String(input.rightsHolder || "Bio-Heritage Collections").slice(0, 200),
+    recordLicense: String(input.recordLicense || "All rights reserved").slice(0, 120),
+    imageCredit: String(input.imageCredit || "Tate / Bio-Heritage Collections").slice(0, 200),
+    imageLicense: String(input.imageLicense || "All rights reserved").slice(0, 120),
+    institutionName: String(input.institutionName || "Bio-Heritage Collections").slice(0, 200),
+    institutionCode: String(input.institutionCode || "BHC").slice(0, 80),
+    collectionCode: String(input.collectionCode || "BHC Entomology").slice(0, 120),
     version: Math.max(1, Number(input.version) || 1),
     createdAt: input.createdAt || now,
     updatedAt: input.updatedAt || now,
     publishedAt: input.publicationStatus === "published" ? (input.publishedAt || now) : (input.publishedAt || null),
   };
+}
+
+const PUBLIC_RECORD_FIELDS = [
+  "id", "entityType", "catalogNumber", "identificationStatus", "scientificName", "scientificNameAuthorship",
+  "commonName", "order", "family", "identifiedBy", "dateIdentified", "identificationRemarks", "datePrecision",
+  "eventDateStart", "eventDateEnd", "collector", "samplingMethod", "habitat", "preservation", "sex", "lifeStage",
+  "wingCondition", "condition", "institutionName", "institutionCode", "collectionCode", "rightsHolder", "recordLicense",
+  "imageCredit", "imageLicense", "preferredCitation", "publicationStatus", "publishedAt", "updatedAt", "version",
+];
+
+function projectPublicRecord(input) {
+  const record = normalizeRecord(input || {});
+  const projected = Object.fromEntries(PUBLIC_RECORD_FIELDS.filter((key) => record[key] !== undefined).map((key) => [key, record[key]]));
+  projected.localityPrivacy = record.localityPrivacy;
+  projected.country = String(record.country || "").slice(0, 160);
+  projected.stateProvince = String(record.stateProvince || "").slice(0, 160);
+  if (record.localityPrivacy === "open") {
+    for (const key of ["county", "locality", "site", "latitude", "longitude", "coordinateUncertainty"]) {
+      if (record[key] !== undefined) projected[key] = record[key];
+    }
+  } else if (record.localityPrivacy === "generalized") {
+    projected.publicLocality = String(record.publicLocality || "").slice(0, 240);
+  }
+  return projected;
 }
 
 async function syncRecords(request, env) {
@@ -154,7 +187,14 @@ async function syncRecords(request, env) {
   return json({ syncedIds: records.map((record) => record.id), syncedAt: new Date().toISOString() });
 }
 
-function mediaResult(row) {
+const PUBLIC_CAPTURE_FIELDS = ["captureMode", "camera", "lens", "magnification", "stackFrames", "stepMicrons", "stackingSoftware", "iso", "aperture", "shutterSpeed", "lighting", "photographer", "captureDate", "license", "notes"];
+
+function projectPublicCaptureMetadata(value) {
+  const metadata = parseCaptureMetadata(value);
+  return Object.fromEntries(PUBLIC_CAPTURE_FIELDS.filter((key) => metadata[key] !== undefined).map((key) => [key, String(metadata[key]).slice(0, 500)]));
+}
+
+function mediaResult(row, { publicOnly = false } = {}) {
   return {
     id: row.id,
     recordId: row.record_id,
@@ -164,7 +204,7 @@ function mediaResult(row) {
     photoType: row.photo_type,
     photoLabel: row.photo_label,
     orientation: row.orientation,
-    captureMetadata: parseCaptureMetadata(row.capture_json),
+    captureMetadata: publicOnly ? projectPublicCaptureMetadata(row.capture_json) : parseCaptureMetadata(row.capture_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publicUrl: `/media/${encodeURIComponent(row.id)}`,
@@ -192,8 +232,8 @@ async function publicRecords(env) {
     ORDER BY media.created_at
   `).all();
   return json({
-    records: recordsResult.results.map((row) => JSON.parse(row.data_json)),
-    media: mediaResultSet.results.map(mediaResult),
+    records: recordsResult.results.map((row) => projectPublicRecord(JSON.parse(row.data_json))),
+    media: mediaResultSet.results.map((row) => mediaResult(row, { publicOnly: true })),
   }, 200, { "cache-control": "public, max-age=60" });
 }
 
@@ -310,3 +350,4 @@ const worker = {
 };
 
 export default worker;
+export { projectPublicRecord, projectPublicCaptureMetadata };
