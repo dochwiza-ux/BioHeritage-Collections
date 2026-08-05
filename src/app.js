@@ -1,4 +1,4 @@
-import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js";
+import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=1.8.1";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];

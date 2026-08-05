@@ -1,8 +1,27 @@
-const CACHE = "bhc-field-shell-v18";
-const SHELL = ["/", "/index.html", "/app.css", "/app.js", "/db.js", "/manifest.webmanifest", "/logo.png", "/icon-192.png", "/icon-512.png"];
+const CACHE = "bhc-field-shell-v19";
+const SHELL = [
+  "/",
+  "/index.html",
+  "/app.css?v=1.8.1",
+  "/app.js?v=1.8.1",
+  "/db.js?v=1.8.1",
+  "/manifest.webmanifest",
+  "/logo.png",
+  "/icon-192.png",
+  "/icon-512.png",
+];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => Promise.all(SHELL.map(async (url) => {
+        const request = new Request(url, { cache: "reload" });
+        const response = await fetch(request);
+        if (!response.ok) throw new Error(`Could not refresh ${url}`);
+        await cache.put(request, response);
+      })))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -19,6 +38,16 @@ self.addEventListener("fetch", (event) => {
   }
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/media/")) {
     event.respondWith(fetch(request).catch(() => new Response(JSON.stringify({ offline: true }), { status: 503, headers: { "content-type": "application/json" } })));
+    return;
+  }
+  if (request.mode === "navigate") {
+    event.respondWith(fetch(request).then(async (response) => {
+      if (response.ok) {
+        const cache = await caches.open(CACHE);
+        await cache.put("/index.html", response.clone());
+      }
+      return response;
+    }).catch(() => caches.match("/index.html")));
     return;
   }
   event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
