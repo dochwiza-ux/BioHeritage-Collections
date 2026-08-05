@@ -146,3 +146,61 @@ test("cloud synchronization supports archive restore and reports both storage se
   assert.match(worker, /imageStorage: Boolean\(env\.MEDIA\)/);
   assert.match(worker, /media: mediaResultSet\.results\.map\(mediaResult\)/);
 });
+
+test("manager and visitor share rights, provenance, image-method and locality controls", async () => {
+  const html = await read("src/index.html");
+  const app = await read("src/app.js");
+  assert.match(html, /name="scientificNameAuthorship"/);
+  assert.match(html, /name="identifiedBy"/);
+  assert.match(html, /name="dateIdentified"/);
+  assert.match(html, /name="institutionCode" value="BHC"/);
+  assert.match(html, /name="rightsHolder" value="Bio-Heritage Collections"/);
+  assert.match(html, /name="recordLicense"/);
+  assert.match(html, /name="localityPrivacy"/);
+  assert.match(html, /name="publicLocality"/);
+  assert.match(html, /id="supplemental-stacking-software"/);
+  assert.match(html, /id="supplemental-iso"/);
+  assert.match(app, /function citationFor\(record\)/);
+  assert.match(app, /function publicLocationFor\(record\)/);
+  assert.match(app, /publicCaptureMetadata\(item, record\)/);
+  assert.match(app, /\["Stacking software", metadata\.stackingSoftware\]/);
+  assert.match(app, /record-data licence/i);
+});
+
+test("the public API redacts protected locality and manager-only metadata", async () => {
+  const { projectPublicRecord, projectPublicCaptureMetadata } = await import("../worker/index.js");
+  const source = {
+    id: "REC-1",
+    publicationStatus: "published",
+    catalogNumber: "BHC-000001",
+    scientificName: "Cicindela example",
+    country: "Zimbabwe",
+    stateProvince: "Harare",
+    county: "Private district",
+    locality: "Sensitive valley",
+    site: "Exact trap site",
+    latitude: "-17.8252",
+    longitude: "31.0335",
+    coordinateUncertainty: "5",
+    sensitiveLocalityReason: "Vulnerable site",
+    notes: "Manager-only note",
+  };
+  const withheld = projectPublicRecord({ ...source, localityPrivacy: "withheld" });
+  assert.equal(withheld.country, "Zimbabwe");
+  assert.equal(withheld.stateProvince, "Harare");
+  assert.equal(withheld.locality, undefined);
+  assert.equal(withheld.site, undefined);
+  assert.equal(withheld.latitude, undefined);
+  assert.equal(withheld.sensitiveLocalityReason, undefined);
+  assert.equal(withheld.notes, undefined);
+  const generalized = projectPublicRecord({ ...source, localityPrivacy: "generalized", publicLocality: "Harare Province, Zimbabwe" });
+  assert.equal(generalized.publicLocality, "Harare Province, Zimbabwe");
+  assert.equal(generalized.longitude, undefined);
+  const open = projectPublicRecord({ ...source, localityPrivacy: "open" });
+  assert.equal(open.site, "Exact trap site");
+  assert.equal(open.latitude, "-17.8252");
+  const capture = projectPublicCaptureMetadata(JSON.stringify({ camera: "Nikon D3300", stackingSoftware: "Helicon Focus", privateNote: "do not publish" }));
+  assert.equal(capture.camera, "Nikon D3300");
+  assert.equal(capture.stackingSoftware, "Helicon Focus");
+  assert.equal(capture.privateNote, undefined);
+});
