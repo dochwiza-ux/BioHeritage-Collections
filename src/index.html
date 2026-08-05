@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#173f35">
+    <meta name="description" content="Offline-first biodiversity collection management and publishing by Bio-Heritage Collections.">
+    <meta property="og:title" content="BHC Field">
+    <meta property="og:description" content="Digitizing nature, connecting the world">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="__BHC_ORIGIN__/og.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="BHC Field">
+    <meta name="twitter:description" content="Digitizing nature, connecting the world">
+    <meta name="twitter:image" content="__BHC_ORIGIN__/og.png">
+    <title>BHC Field</title>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" href="/logo.png" type="image/png">
+    <link rel="stylesheet" href="/app.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand-lockup">
+          <img class="brand-logo" src="/logo.png" alt="BHC logo">
+          <div><strong>BHC</strong><small>FIELD</small></div>
+        </div>
+        <nav class="nav-list">
+          <button class="nav-item active" data-view="overview"><span>01</span>Overview</button>
+          <button class="nav-item" data-view="capture"><span>02</span>New record</button>
+          <button class="nav-item" data-view="records"><span>03</span>Records</button>
+          <button class="nav-item" data-view="publish"><span>04</span>Publish</button>
+          <button class="nav-item" data-view="catalogue"><span>05</span>Catalogue</button>
+        </nav>
+        <div class="sidebar-foot">
+          <div class="connection-card">
+            <span class="status-dot" id="sidebar-dot"></span>
+            <div><strong id="sidebar-status">Checking connection</strong><small id="sidebar-detail">Your work stays on this device</small></div>
+          </div>
+          <p>Bio-Heritage Collections v1.7.0<br>Secure Cloud archive edition</p>
+        </div>
+      </aside>
+
+      <div class="workspace">
+        <header class="topbar">
+          <button class="menu-button" id="menu-button" aria-label="Open navigation">Menu</button>
+          <div class="sync-state" aria-live="polite">
+            <span class="status-dot" id="topbar-dot"></span>
+            <span id="connection-label">Offline-ready</span>
+            <span class="queue-pill" id="queue-pill">0 queued</span>
+          </div>
+          <div class="topbar-actions">
+            <a class="button secondary compact" href="/catalogue" target="_blank" rel="noopener">Visitor page</a>
+            <button class="button secondary compact" id="install-button" hidden>Install app</button>
+            <button class="button primary compact" id="sync-button">Sync now</button>
+          </div>
+        </header>
+
+        <main id="main">
+          <section class="view active" id="view-overview" data-title="Overview">
+            <div class="hero-grid">
+              <div class="hero-copy">
+                <p class="eyebrow">Field collection workspace</p>
+                <h1>Digitizing nature,<br><em>connecting the world</em></h1>
+                <p class="hero-text">Capture specimens, locations and collection events wherever the work happens. BHC keeps every change on this device, then moves it safely to the collection when a connection returns.</p>
+                <div class="hero-actions">
+                  <button class="button primary" data-go="capture">Create a record</button>
+                  <button class="button text" data-go="records">Review local records <span aria-hidden="true">→</span></button>
+                </div>
+              </div>
+              <div class="field-card" aria-label="Current field session">
+                <div class="field-card-top"><span>FIELD NOTE / <span id="today-label"></span></span><span class="live-mark">LOCAL</span></div>
+                <blockquote>“Good data begins at the moment of collection.”</blockquote>
+                <div class="contour-lines" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+                <div class="field-card-bottom"><span>Device archive active</span><span id="storage-status">Storage ready</span></div>
+              </div>
+            </div>
+
+            <div class="metric-grid" aria-label="Collection statistics">
+              <article class="metric"><span>LOCAL RECORDS</span><strong id="metric-total">0</strong><small>on this device</small></article>
+              <article class="metric"><span>AWAITING SYNC</span><strong id="metric-queued">0</strong><small>safe offline</small></article>
+              <article class="metric"><span>READY TO PUBLISH</span><strong id="metric-ready">0</strong><small>quality checked</small></article>
+              <article class="metric"><span>PUBLIC RECORDS</span><strong id="metric-published">0</strong><small>in catalogue</small></article>
+            </div>
+
+            <div class="overview-grid">
+              <section class="panel">
+                <div class="panel-heading"><div><p class="eyebrow">Recent work</p><h2>Latest records</h2></div><button class="button text compact" data-go="records">View all</button></div>
+                <div id="recent-records" class="record-list empty-state"><p>No records yet.</p><button class="button secondary compact" data-go="capture">Start the first one</button></div>
+              </section>
+              <section class="panel sync-panel">
+                <div class="panel-heading"><div><p class="eyebrow">Transfer queue</p><h2>Sync health</h2></div><span class="big-status-dot" id="sync-health-dot"></span></div>
+                <div class="sync-illustration" aria-hidden="true"><span class="device-box">DEVICE</span><span class="sync-line"><i></i><i></i><i></i></span><span class="cloud-box">CLOUD</span></div>
+                <p id="sync-summary">Nothing is waiting. This device and the cloud collection are aligned.</p>
+                <button class="button secondary full" id="overview-sync">Synchronize collection</button>
+              </section>
+            </div>
+          </section>
+
+          <section class="view" id="view-capture" data-title="New record">
+            <div class="page-heading">
+              <div><p class="eyebrow">Specimen intake</p><h1 id="form-heading">New collection record</h1><p>Only fields marked with an asterisk are required. Everything else can be added when known.</p></div>
+              <div class="draft-badge"><span></span>Saved locally as you work</div>
+            </div>
+
+            <form id="record-form" novalidate>
+              <input type="hidden" id="record-id" name="id">
+              <div class="form-grid">
+                <section class="form-section span-2">
+                  <div class="section-number">01</div><div class="section-title"><h2>Identity</h2><p>The name used to recognize this specimen.</p></div>
+                  <div class="fields two-col">
+                    <label>Catalog number *<input name="catalogNumber" id="catalog-number" required readonly placeholder="Assigned automatically"></label>
+                    <label>Identification status *<select name="identificationStatus" required><option>Identification Pending</option><option>Provisional</option><option>Verified</option><option>Unidentified</option></select></label>
+                    <label>Scientific name<input name="scientificName" id="scientific-name" autocomplete="off" placeholder="Genus species"></label>
+                    <label>Common name<input name="commonName" id="common-name" autocomplete="off"></label>
+                    <label>Order<input name="order" autocomplete="off"></label>
+                    <label>Family<input name="family" autocomplete="off"></label>
+                  </div>
+                  <p class="field-note">Provide either a scientific name or a common name.</p>
+                </section>
+
+                <section class="form-section span-2">
+                  <div class="section-number">02</div><div class="section-title"><h2>Location funnel</h2><p>Start with country. Each later field is narrowed by the earlier choices.</p></div>
+                  <div class="fields three-col">
+                    <label>Country *<input name="country" id="country" list="countries" required autocomplete="country-name"><datalist id="countries"></datalist></label>
+                    <label>State / Province<input name="stateProvince" id="state-province" list="states" autocomplete="address-level1"><datalist id="states"></datalist></label>
+                    <label>County / District<input name="county" id="county" list="counties" autocomplete="address-level2"><datalist id="counties"></datalist></label>
+                    <label>Locality<input name="locality" id="locality" list="localities"><datalist id="localities"></datalist></label>
+                    <label>Collection site<input name="site" id="site" list="sites"><datalist id="sites"></datalist></label>
+                    <label>Location ID<input name="locationId" id="location-id" readonly placeholder="Created automatically"></label>
+                    <label>Latitude<input name="latitude" type="number" step="any" inputmode="decimal"></label>
+                    <label>Longitude<input name="longitude" type="number" step="any" inputmode="decimal"></label>
+                    <label>Uncertainty (m)<input name="coordinateUncertainty" type="number" min="0" step="any" inputmode="decimal"></label>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <div class="section-number">03</div><div class="section-title"><h2>Collection event</h2><p>When and how it was collected.</p></div>
+                  <div class="fields">
+                    <label>Date precision *<select name="datePrecision" id="date-precision" required><option>Exact date</option><option>Date range</option><option>Month only</option><option>Year only</option><option>Unknown</option></select></label>
+                    <label>Start date *<input name="eventDateStart" id="event-date-start" type="date" required></label>
+                    <label>End date<input name="eventDateEnd" type="date"></label>
+                    <label>Collector<input name="collector" autocomplete="name"></label>
+                    <label>Sampling method<input name="samplingMethod" list="sampling-methods"><datalist id="sampling-methods"><option>Hand collected / Visual search</option><option>Sweep net</option><option>Light trap</option><option>Pitfall trap</option><option>Malaise trap</option><option>Host plant inspection</option></datalist></label>
+                    <label>Habitat<input name="habitat" list="habitats"><datalist id="habitats"><option>Fields</option><option>Ponds & Streams</option><option>Woods</option><option>Field Edges</option><option>Houses</option><option>Bare Ground</option></datalist></label>
+                  </div>
+                </section>
+
+                <section class="form-section">
+                  <div class="section-number">04</div><div class="section-title"><h2>Specimen</h2><p>Preparation and biological details.</p></div>
+                  <div class="fields">
+                    <label>Workflow status *<select name="workflowStatus" required><option>Cataloged</option><option>Prepared</option><option>Captured</option><option>Processing</option><option>QC Review</option><option>Ready</option></select></label>
+                    <label>Preservation<select name="preservation"><option value="">Not recorded</option><option>Pinned</option><option>Point Mounted</option><option>Ethanol</option><option>Frozen</option><option>Dry</option></select></label>
+                    <label>Sex<select name="sex"><option>Unknown</option><option>Male</option><option>Female</option><option>Not Determined</option><option>N/A</option></select></label>
+                    <label>Life stage<select name="lifeStage"><option value="">Not recorded</option><option>Egg</option><option>Larva</option><option>Nymph</option><option>Pupa</option><option>Adult</option><option>Unknown</option></select></label>
+                    <label>Wings / elytra status<select name="wingCondition" id="wing-condition"><option value="">Not assessed</option><option value="wings-present">Wings present</option><option value="elytra-present">Elytra present</option><option value="wingless">Naturally wingless / apterous</option><option value="lost-damaged">Lost, damaged or obscured</option><option value="not-applicable">Not applicable to this life stage</option></select></label>
+                    <label>Condition<select name="condition"><option value="">Not recorded</option><option>Excellent</option><option>Good</option><option>Fair</option><option>Poor</option><option>Damaged</option></select></label>
+                    <label>Notes<textarea name="notes" rows="3"></textarea></label>
+                  </div>
+                </section>
+
+                <section class="form-section span-2 media-section">
+                  <div class="section-number">05</div><div class="section-title"><h2>Research photographs</h2><p>Build a documented anatomical image set, from whole-specimen views to diagnostic details.</p></div>
+                  <div class="photo-workflow">
+                    <div class="photo-protocol-head">
+                      <div><span class="protocol-kicker">Adaptive research protocol</span><h3>Photographic coverage</h3><p>Capture each applicable view. Mark anatomy as hidden, inapplicable or restricted when a photograph cannot or should not be made.</p></div>
+                      <div class="photo-score"><strong id="photo-score">0 / 16</strong><span>documented</span></div>
+                    </div>
+                    <div class="photo-progress" aria-label="Photographic protocol completion"><span id="photo-progress-bar"></span></div>
+                    <div id="photo-protocol-grid" class="photo-protocol-grid"></div>
+
+                    <div id="media-preview" class="media-preview"></div>
+                    <details class="capture-metadata supplemental-capture">
+                      <summary>Settings for the additional image <span>Applied only to the next additional upload</span></summary>
+                      <div class="fields three-col">
+                        <label>Capture type<select id="supplemental-capture-mode"><option value="single">Single frame</option><option value="macro-single">Macro — single frame</option><option value="focus-stack">Focus stack</option><option value="macro-stack">Macro — focus stack</option><option value="microscope">Microscope image</option></select></label>
+                        <label>Camera body<input id="supplemental-camera" placeholder="e.g. Nikon D3300"></label>
+                        <label>Lens / objective<input id="supplemental-lens" placeholder="Lens used for this image"></label>
+                        <label>Magnification<input id="supplemental-magnification" placeholder="e.g. 1× or 5×"></label>
+                        <label>Stack frames<input id="supplemental-stack-frames" type="number" min="1" step="1"></label>
+                        <label>Step size (µm)<input id="supplemental-step-microns" type="number" min="0" step="any"></label>
+                        <label>Lighting<input id="supplemental-lighting" placeholder="Lighting used for this image"></label>
+                        <label>Photographer<input id="supplemental-photographer" autocomplete="name"></label>
+                        <label>Capture date<input id="supplemental-capture-date" type="date"></label>
+                        <label>Image licence<input id="supplemental-license" placeholder="e.g. CC BY 4.0"></label>
+                        <label>Image notes<textarea id="supplemental-notes" rows="3"></textarea></label>
+                      </div>
+                    </details>
+                    <label class="drop-zone supplemental" for="media-files"><input id="media-files" type="file" accept="image/*,.tif,.tiff,.dng,.nef,.cr2,.arw" multiple><span class="drop-icon">+</span><strong>Add an additional image</strong><small>For labels, scales or another useful view · up to 100 MB each</small></label>
+                  </div>
+                </section>
+              </div>
+              <div class="form-actions"><button type="button" class="button text" id="clear-form">Clear form</button><button type="submit" class="button primary">Save safely on this device</button></div>
+            </form>
+          </section>
+
+          <section class="view" id="view-records" data-title="Records">
+            <div class="page-heading"><div><p class="eyebrow">Device archive</p><h1>Collection records</h1><p>Search, review and prepare records whether you are connected or not.</p></div><button class="button primary" data-go="capture">New record</button></div>
+            <div class="toolbar"><label class="search-box"><span>Search</span><input id="record-search" type="search" placeholder="Catalog number, name or locality"></label><label>Status<select id="record-filter"><option value="all">All records</option><option value="queued">Awaiting sync</option><option value="draft">Draft</option><option value="ready">Ready</option><option value="published">Published</option></select></label></div>
+            <div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="select-all" aria-label="Select all records"></th><th>Record</th><th>Location</th><th>Event date</th><th>Photos</th><th>Publication</th><th>Sync</th><th></th></tr></thead><tbody id="records-body"></tbody></table><div id="records-empty" class="empty-table" hidden>No records match this view.</div></div>
+          </section>
+
+          <section class="view" id="view-publish" data-title="Publish">
+            <div class="page-heading"><div><p class="eyebrow">Cloud catalogue</p><h1>Review, export, publish</h1><p>Publishing never deletes the offline copy. It marks approved records for the public catalogue and synchronizes them to Cloudflare.</p></div></div>
+            <div class="publish-grid">
+              <section class="panel publish-hero"><p class="eyebrow">Release gate</p><h2 id="publish-count">0 records ready</h2><p>Select records in the archive, confirm that sensitive locality data has been generalized where needed, then release them.</p><div class="publish-actions"><button class="button primary" id="publish-selected">Publish selected records</button><button class="button secondary" id="mark-ready">Mark selected ready</button></div></section>
+              <section class="panel checklist"><h2>Before publishing</h2><label><input type="checkbox" id="check-identification"> Identification has been reviewed</label><label><input type="checkbox" id="check-locality"> Sensitive locality has been considered</label><label><input type="checkbox" id="check-photography"> Research-photo coverage has been reviewed</label><p id="photo-review-summary" class="check-note">Select records to review photographic coverage.</p><label><input type="checkbox" id="check-media"> Image rights and credit are recorded</label></section>
+              <section class="panel override-panel" id="photo-override-box" hidden>
+                <div><p class="eyebrow">Data-manager decision</p><h2>Exceptional publication override</h2><p>Use only when incomplete photographic coverage is understood and the record remains valuable to publish.</p></div>
+                <div class="override-controls"><label class="override-check"><input type="checkbox" id="check-photo-override"> Publish despite the documented photography gaps</label><label>Reason for override<textarea id="photo-override-reason" rows="3" placeholder="Explain why publication is appropriate and what remains incomplete" disabled></textarea></label><small>The reason, date and outstanding views will be retained with the management record.</small></div>
+              </section>
+            </div>
+            <div class="export-grid"><article><span>DWCA-READY CSV</span><h3>Occurrence export</h3><p>Darwin Core-style columns for GBIF preparation and external analysis.</p><button class="button secondary" id="export-csv">Download CSV</button></article><article><span>FULL BACKUP</span><h3>Device archive</h3><p>Records and metadata in a portable JSON file.</p><button class="button secondary" id="export-json">Download backup</button></article><article><span>RESTORE</span><h3>Import backup</h3><p>Merge a BHC Field JSON backup into this device.</p><label class="button secondary file-button">Choose backup<input id="import-json" type="file" accept="application/json"></label></article></div>
+          </section>
+
+          <section class="view" id="view-catalogue" data-title="Catalogue">
+            <div class="visitor-brand"><img class="visitor-logo" src="/logo.png" alt="BHC logo"><div><strong>Bio-Heritage Collections</strong><small>PUBLIC COLLECTION</small></div></div>
+            <figure class="catalogue-hero"><img src="/og.png" width="1731" height="909" alt="BHC — Digitizing nature, connecting the world. An emerald specimen beetle beside a collection label and locality map."></figure>
+            <div class="catalogue-head"><div><p class="eyebrow">Bio-Heritage Collections</p><h1>Explore the collection.</h1><p>Published specimen records and research photographs, preserved for discovery and future study.</p><p class="catalogue-source-status" id="catalogue-source-status" aria-live="polite">Loading the published collection…</p></div><label class="catalogue-search">Search the collection<input id="catalogue-search" type="search" placeholder="Names, places or catalog numbers"></label></div>
+            <aside class="photo-request-line" aria-labelledby="photo-request-title">
+              <span class="request-mark" aria-hidden="true">@</span>
+              <div><p class="eyebrow">Research image requests</p><h2 id="photo-request-title">Need a specific picture or viewing angle?</h2><p>Visitors are welcome to contact Tate with the specimen name, catalogue number and the view required.</p></div>
+              <a class="button request-button" href="mailto:dochwiza@gmail.com?subject=BHC%20research%20photograph%20request&amp;body=Specimen%20name%20or%20catalogue%20number%3A%0D%0ARequested%20picture%20or%20viewing%20angle%3A%0D%0A">Email dochwiza@gmail.com</a>
+            </aside>
+            <div id="catalogue-grid" class="catalogue-grid"></div>
+            <div id="catalogue-empty" class="catalogue-empty"><strong>No public records yet.</strong><span>Records appear here after review and publication.</span></div>
+          </section>
+        </main>
+        <dialog id="specimen-dialog" class="specimen-dialog" aria-labelledby="specimen-dialog-title"><div class="dialog-bar"><span>Published specimen</span><button type="button" id="close-specimen-dialog" aria-label="Close specimen details">Close</button></div><div id="specimen-dialog-content"></div></dialog>
+        <dialog id="image-viewer-dialog" class="image-viewer-dialog" aria-labelledby="image-viewer-title">
+          <div class="image-viewer-shell">
+            <div class="dialog-bar"><span id="image-viewer-title">Research photograph</span><button type="button" id="close-image-viewer" aria-label="Close image viewer">Close</button></div>
+            <div class="image-viewer-toolbar" role="toolbar" aria-label="Image zoom and pan controls">
+              <div class="image-viewer-control-group" aria-label="Zoom controls">
+                <button type="button" id="image-zoom-out" aria-label="Zoom out">Zoom out</button>
+                <output id="image-zoom-level" aria-live="polite">100%</output>
+                <button type="button" id="image-zoom-in" aria-label="Zoom in">Zoom in</button>
+              </div>
+              <div class="image-viewer-control-group image-pan-controls" aria-label="Pan controls">
+                <button type="button" id="image-pan-left" aria-label="Pan image left">Left</button>
+                <button type="button" id="image-pan-up" aria-label="Pan image up">Up</button>
+                <button type="button" id="image-pan-down" aria-label="Pan image down">Down</button>
+                <button type="button" id="image-pan-right" aria-label="Pan image right">Right</button>
+              </div>
+              <button type="button" id="image-view-reset" class="image-view-reset">Reset to fit</button>
+            </div>
+            <div id="image-viewer-stage" class="image-viewer-stage" tabindex="0" aria-label="Zoomable research photograph. Drag to pan when zoomed.">
+              <img id="image-viewer-image" alt="" draggable="false">
+              <span class="photo-signature viewer-signature" aria-hidden="true">tate</span>
+            </div>
+            <p class="image-viewer-hint">Use the controls, mouse wheel, or + and - keys to zoom. Drag or use the arrow keys to pan.</p>
+          </div>
+        </dialog>
+      </div>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

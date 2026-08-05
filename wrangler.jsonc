@@ -1,0 +1,34 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bioheritage-collections",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-05",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bhc-field",
+      "database_id": "86b6ab53-9dc5-4495-9967-8cc70fadfffe"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "bhc-field-media"
+    }
+  ],
+  "vars": {
+    "MANAGER_EMAIL": "dochwiza@gmail.com",
+    "ACCESS_TEAM_DOMAIN": "round-dream-090c.cloudflareaccess.com",
+    "ACCESS_AUD": "b7d70324f3cd7b9659e58b3b81e1e22831cc1bc5a67a3e96174b1246e3c7ac56"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
