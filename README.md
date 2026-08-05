@@ -1,4 +1,4 @@
-# BHC Field v1.7.0
+# BHC Field v1.8.0
 
 BHC Field is an offline-first biodiversity collection app for Bio-Heritage Collections. It captures
 specimen identity, country-first locations, collection events, preparation
@@ -11,6 +11,8 @@ The app includes:
 - IndexedDB records and queued media on the device;
 - an adaptive 16-view anatomical research-photography protocol with documented omissions;
 - persistent sequential catalogue numbers and per-image capture metadata;
+- specimen provenance, citation, data rights and per-image reuse terms shared between manager and visitor views;
+- explicit open, generalized or withheld public-locality controls with server-side redaction;
 - conflict-safe synchronization using client-generated IDs and timestamps;
 - authenticated write endpoints and anonymous read-only public records;
 - publication review checks with an audited manager override;
