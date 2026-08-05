@@ -8,10 +8,17 @@ test("offline app shell includes service worker and manifest", async () => {
   const html = await read("src/index.html");
   const app = await read("src/app.js");
   const db = await read("src/db.js");
+  const serviceWorker = await read("src/sw.js");
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /src="\/logo\.png"/);
+  assert.match(html, /app\.css\?v=1\.8\.1/);
+  assert.match(html, /app\.js\?v=1\.8\.1/);
+  assert.match(app, /db\.js\?v=1\.8\.1/);
   assert.match(app, /serviceWorker\.register/);
   assert.match(db, /indexedDB/);
+  assert.match(serviceWorker, /bhc-field-shell-v19/);
+  assert.match(serviceWorker, /cache: "reload"/);
+  assert.match(serviceWorker, /request\.mode === "navigate"/);
 });
 
 test("minimum scientific fields and publication checks exist", async () => {
