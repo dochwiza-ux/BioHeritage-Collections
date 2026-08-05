@@ -115,6 +115,10 @@ function captureSettingsMarkup(slot) {
     ${field("magnification", "Magnification", { placeholder: "e.g. 1× or 5×" })}
     ${field("stackFrames", "Stack frames", { type: "number", min: "1", step: "1" })}
     ${field("stepMicrons", "Step size (µm)", { type: "number", min: "0", step: "any" })}
+    ${field("stackingSoftware", "Stacking software", { placeholder: "e.g. Helicon Focus" })}
+    ${field("iso", "ISO", { placeholder: "e.g. 100" })}
+    ${field("aperture", "Aperture", { placeholder: "e.g. f/8" })}
+    ${field("shutterSpeed", "Shutter speed", { placeholder: "e.g. 1/200 s" })}
     ${field("lighting", "Lighting", { placeholder: "Lighting used for this view" })}
     ${field("photographer", "Photographer")}
     ${field("captureDate", "Capture date", { type: "date" })}
@@ -131,6 +135,10 @@ function readSupplementalCaptureMetadata() {
     magnification: clean($("#supplemental-magnification").value),
     stackFrames: clean($("#supplemental-stack-frames").value),
     stepMicrons: clean($("#supplemental-step-microns").value),
+    stackingSoftware: clean($("#supplemental-stacking-software").value),
+    iso: clean($("#supplemental-iso").value),
+    aperture: clean($("#supplemental-aperture").value),
+    shutterSpeed: clean($("#supplemental-shutter-speed").value),
     lighting: clean($("#supplemental-lighting").value),
     photographer: clean($("#supplemental-photographer").value),
     captureDate: clean($("#supplemental-capture-date").value),
@@ -143,6 +151,7 @@ function captureSummary(metadata = {}) {
   const parts = [CAPTURE_MODE_LABELS[metadata.captureMode] || metadata.captureMode, metadata.camera, metadata.lens, metadata.magnification];
   if (metadata.stackFrames) parts.push(`${metadata.stackFrames} frames`);
   if (metadata.stepMicrons) parts.push(`${metadata.stepMicrons} µm steps`);
+  if (metadata.stackingSoftware) parts.push(metadata.stackingSoftware);
   return parts.filter(Boolean).join(" · ");
 }
 
@@ -154,6 +163,10 @@ function captureMetadataMarkup(metadata = {}) {
     ["Lens / objective", metadata.lens],
     ["Magnification", metadata.magnification],
     ["Focus stack", stack],
+    ["Stacking software", metadata.stackingSoftware],
+    ["ISO", metadata.iso],
+    ["Aperture", metadata.aperture],
+    ["Shutter speed", metadata.shutterSpeed],
     ["Lighting", metadata.lighting],
     ["Photographer", metadata.photographer],
     ["Capture date", metadata.captureDate],
@@ -391,8 +404,41 @@ function titleFor(record) {
   return record.scientificName || record.commonName || "Unidentified specimen";
 }
 
+function scientificNameFor(record) {
+  return [record.scientificName, record.scientificNameAuthorship].map(clean).filter(Boolean).join(" ") || "Identification pending";
+}
+
 function locationFor(record) {
   return [record.site, record.locality, record.stateProvince, record.country].filter(Boolean).join(", ") || "Location not recorded";
+}
+
+function publicLocationFor(record) {
+  const treatment = clean(record.localityPrivacy) || "withheld";
+  if (treatment === "open") return locationFor(record);
+  if (treatment === "generalized" && clean(record.publicLocality)) return clean(record.publicLocality);
+  return [record.stateProvince, record.country].map(clean).filter(Boolean).join(", ") || "Locality withheld";
+}
+
+function localityDisclosureFor(record) {
+  const treatment = clean(record.localityPrivacy) || "withheld";
+  if (treatment === "open") return "Open locality - recorded locality and coordinates approved for publication";
+  if (treatment === "generalized") return "Generalized locality - exact site and coordinates are protected";
+  return "Locality withheld - exact site and coordinates are protected";
+}
+
+function citationFor(record) {
+  if (clean(record.preferredCitation)) return clean(record.preferredCitation);
+  const year = new Date(record.publishedAt || record.updatedAt || Date.now()).getFullYear();
+  const repository = clean(record.institutionName) || "Bio-Heritage Collections";
+  return `${repository} (${year}). ${record.catalogNumber || "Uncatalogued specimen"}: ${scientificNameFor(record)}. BHC Public Collection.`;
+}
+
+function publicCaptureMetadata(item, record) {
+  return {
+    ...(item.captureMetadata || {}),
+    photographer: clean(item.captureMetadata?.photographer) || clean(record.imageCredit),
+    license: clean(item.captureMetadata?.license) || clean(record.imageLicense) || "All rights reserved",
+  };
 }
 
 function initials(record) {
@@ -587,14 +633,14 @@ async function renderCatalogue() {
     } catch { /* local catalogue remains available */ }
   }
   const query = clean($("#catalogue-search")?.value).toLowerCase();
-  published = published.filter((record) => [record.catalogNumber, record.scientificName, record.commonName, locationFor(record)].join(" ").toLowerCase().includes(query));
+  published = published.filter((record) => [record.catalogNumber, record.scientificName, record.scientificNameAuthorship, record.commonName, record.order, record.family, publicLocationFor(record)].join(" ").toLowerCase().includes(query));
   const host = $("#catalogue-grid");
   state.catalogueRecords = published;
   state.catalogueMedia = media;
   const sourceStatus = $("#catalogue-source-status");
   if (sourceStatus) sourceStatus.textContent = state.localPreview
     ? `Local preview: showing ${published.length} published record${published.length === 1 ? "" : "s"} and photographs saved on this device.`
-    : (cloudCatalogueAvailable ? "Showing the synchronized public collection." : "Showing the published collection saved on this device.");
+    : (cloudCatalogueAvailable ? "Showing specimen records reviewed and published by Bio-Heritage Collections." : "Cloud collection unavailable - showing the last published copy held on this device.");
   $("#catalogue-empty").hidden = published.length > 0;
   host.innerHTML = published.map((record) => {
     const allRecordMedia = media.filter((item) => item.recordId === record.id && (item.publicUrl || item.blob));
@@ -603,7 +649,7 @@ async function renderCatalogue() {
     const source = image?.publicUrl || (image?.blob ? URL.createObjectURL(image.blob) : "");
     return `<article class="specimen-card">
       <div class="specimen-image">${source ? `<img src="${escapeAttribute(source)}" alt="${escapeAttribute(`${titleFor(record)} — ${image.photoLabel || "specimen photograph"}`)}"><span class="photo-signature" aria-hidden="true">tate</span>` : `<span class="monogram">${escapeHtml(initials(record))}</span>`}</div>
-      <div class="specimen-card-body"><span class="catalog-id">${escapeHtml(record.catalogNumber)}</span><h2><i>${escapeHtml(record.scientificName || "Identification pending")}</i></h2><p class="common">${escapeHtml(record.commonName || record.identificationStatus)}</p><div class="specimen-meta"><span>Collected<strong>${escapeHtml(record.eventDateStart || "Not recorded")}</strong></span><span>Locality<strong>${escapeHtml(locationFor(record))}</strong></span></div><div class="specimen-card-actions"><span>${allRecordMedia.length} photograph${allRecordMedia.length === 1 ? "" : "s"}</span><button class="button secondary compact" data-open-specimen="${record.id}">View record</button></div></div>
+      <div class="specimen-card-body"><span class="catalog-id">${escapeHtml(record.catalogNumber)}</span><h2><i>${escapeHtml(scientificNameFor(record))}</i></h2><p class="common">${escapeHtml(record.commonName || record.identificationStatus)}</p><div class="specimen-meta"><span>Collected<strong>${escapeHtml(record.eventDateStart || "Not recorded")}</strong></span><span>Public locality<strong>${escapeHtml(publicLocationFor(record))}</strong></span></div><div class="specimen-card-actions"><span>${allRecordMedia.length} photograph${allRecordMedia.length === 1 ? "" : "s"}</span><button class="button secondary compact" data-open-specimen="${record.id}">View record</button></div></div>
     </article>`;
   }).join("");
   $$('[data-open-specimen]', host).forEach((button) => button.addEventListener("click", () => openSpecimen(button.dataset.openSpecimen)));
@@ -620,11 +666,21 @@ function openSpecimen(id) {
     const source = item.publicUrl || (item.blob ? URL.createObjectURL(item.blob) : "");
     const label = item.photoLabel || protocolSlot(item.photoType)?.label || "Specimen photograph";
     const orientation = item.orientation ? `${item.orientation} side` : "";
-    const captureDetails = captureMetadataMarkup(item.captureMetadata);
+    const captureDetails = captureMetadataMarkup(publicCaptureMetadata(item, record));
     if (!isDisplayableMime(item.mimeType || item.blob?.type)) return `<figure class="research-photo research-file"><div class="media-file-fallback">Original research file</div><figcaption>${escapeHtml(label)}<span>${escapeHtml([item.fileName || item.mimeType || "Image file", orientation].filter(Boolean).join(" · "))}</span>${source ? `<a class="button secondary compact" href="${escapeAttribute(source)}" target="_blank" rel="noopener">Open original</a>` : ""}</figcaption>${captureDetails}</figure>`;
     return `<figure class="research-photo"><button type="button" class="research-photo-open" data-inspect-image="${escapeAttribute(item.id)}" aria-label="Zoom and pan ${escapeAttribute(label)}"><img src="${escapeAttribute(source)}" alt="${escapeAttribute(`${titleFor(record)} — ${label}`)}"><span class="photo-signature" aria-hidden="true">tate</span><span class="photo-view-action">Zoom &amp; pan</span></button><figcaption>${escapeHtml(label)}${orientation ? `<span>${escapeHtml(orientation)}</span>` : ""}</figcaption>${captureDetails}</figure>`;
   }).join("");
-  $("#specimen-dialog-content").innerHTML = `<article class="specimen-detail"><div class="specimen-detail-head"><div><span class="catalog-id">${escapeHtml(record.catalogNumber)}</span><h2 id="specimen-dialog-title"><i>${escapeHtml(record.scientificName || "Identification pending")}</i></h2><p>${escapeHtml(record.commonName || record.identificationStatus || "")}</p></div><div class="specimen-detail-facts"><span>Collected<strong>${escapeHtml(record.eventDateStart || "Not recorded")}</strong></span><span>Locality<strong>${escapeHtml(locationFor(record))}</strong></span><span>Collector<strong>${escapeHtml(record.collector || "Not recorded")}</strong></span><span>Life stage<strong>${escapeHtml(record.lifeStage || "Not recorded")}</strong></span></div></div><aside class="specimen-photo-request"><div><strong>Would another picture or angle help your research?</strong><span>Send the catalogue number and requested view directly to Tate.</span></div><a class="button secondary compact" href="${escapeAttribute(requestHref)}">Request this specimen</a></aside>${gallery ? `<div class="research-gallery">${gallery}</div>` : `<div class="research-empty">No public research photographs are attached to this record.</div>`}</article>`;
+  const eventDate = [record.eventDateStart, record.eventDateEnd && record.eventDateEnd !== record.eventDateStart ? record.eventDateEnd : ""].filter(Boolean).join(" to ") || "Not recorded";
+  const repository = [record.institutionName || "Bio-Heritage Collections", record.collectionCode].filter(Boolean).join(" - ");
+  const identification = [record.identifiedBy ? `By ${record.identifiedBy}` : "", record.dateIdentified].filter(Boolean).join(" - ") || "Not recorded";
+  const coordinates = record.localityPrivacy === "open" && clean(record.latitude) && clean(record.longitude) ? `${record.latitude}, ${record.longitude}${record.coordinateUncertainty ? ` (±${record.coordinateUncertainty} m)` : ""}` : "Protected";
+  $("#specimen-dialog-content").innerHTML = `<article class="specimen-detail">
+    <div class="specimen-detail-head"><div><span class="catalog-id">${escapeHtml(record.catalogNumber)}</span><h2 id="specimen-dialog-title"><i>${escapeHtml(scientificNameFor(record))}</i></h2><p>${escapeHtml(record.commonName || record.identificationStatus || "")}</p></div><div class="specimen-detail-facts"><span>Collected<strong>${escapeHtml(eventDate)}</strong></span><span>Public locality<strong>${escapeHtml(publicLocationFor(record))}</strong></span><span>Collector<strong>${escapeHtml(record.collector || "Not recorded")}</strong></span><span>Repository<strong>${escapeHtml(repository)}</strong></span><span>Life stage<strong>${escapeHtml(record.lifeStage || "Not recorded")}</strong></span><span>Coordinates<strong>${escapeHtml(coordinates)}</strong></span></div></div>
+    <div class="specimen-record-sections">
+      <section class="record-detail-panel"><p class="eyebrow">Identification and provenance</p><h3>Research record</h3><dl class="record-detail-list"><div><dt>Identification status</dt><dd>${escapeHtml(record.identificationStatus || "Not recorded")}</dd></div><div><dt>Identified</dt><dd>${escapeHtml(identification)}</dd></div><div><dt>Order / family</dt><dd>${escapeHtml([record.order, record.family].filter(Boolean).join(" / ") || "Not recorded")}</dd></div><div><dt>Preservation</dt><dd>${escapeHtml(record.preservation || "Not recorded")}</dd></div><div><dt>Sex</dt><dd>${escapeHtml(record.sex || "Not recorded")}</dd></div><div><dt>Last updated</dt><dd>${escapeHtml(record.updatedAt ? new Date(record.updatedAt).toLocaleDateString() : "Not recorded")}</dd></div></dl>${record.identificationRemarks ? `<p class="record-remarks">${escapeHtml(record.identificationRemarks)}</p>` : ""}</section>
+      <section class="record-detail-panel rights-panel"><p class="eyebrow">Citation and reuse</p><h3>Use this record responsibly</h3><blockquote>${escapeHtml(citationFor(record))}</blockquote><dl class="record-detail-list"><div><dt>Rights holder</dt><dd>${escapeHtml(record.rightsHolder || "Bio-Heritage Collections")}</dd></div><div><dt>Record-data licence</dt><dd>${escapeHtml(record.recordLicense || "All rights reserved")}</dd></div><div><dt>Default image credit</dt><dd>${escapeHtml(record.imageCredit || "Tate / Bio-Heritage Collections")}</dd></div><div><dt>Default image licence</dt><dd>${escapeHtml(record.imageLicense || "All rights reserved")}</dd></div></dl><p class="privacy-note">${escapeHtml(localityDisclosureFor(record))}</p></section>
+    </div>
+    <aside class="specimen-photo-request"><div><strong>Would another picture or angle help your research?</strong><span>Send the catalogue number and requested view directly to Tate.</span></div><a class="button secondary compact" href="${escapeAttribute(requestHref)}">Request this specimen</a></aside>${gallery ? `<div class="research-gallery">${gallery}</div>` : `<div class="research-empty">No public research photographs are attached to this record.</div>`}</article>`;
   $$("[data-inspect-image]", $("#specimen-dialog-content")).forEach((button) => button.addEventListener("click", () => {
     const item = state.catalogueMedia.find((mediaItem) => mediaItem.id === button.dataset.inspectImage);
     if (item) openImageViewer(item, record);
@@ -660,6 +716,14 @@ async function saveForm(event) {
     catalogNumber,
     photoProtocolVersion: 1,
     photoOmissions: { ...state.photoOmissions },
+    localityPrivacy: clean(data.localityPrivacy) || "generalized",
+    rightsHolder: clean(data.rightsHolder) || "Bio-Heritage Collections",
+    recordLicense: clean(data.recordLicense) || "All rights reserved",
+    imageCredit: clean(data.imageCredit) || "Tate / Bio-Heritage Collections",
+    imageLicense: clean(data.imageLicense) || "All rights reserved",
+    institutionName: clean(data.institutionName) || "Bio-Heritage Collections",
+    institutionCode: clean(data.institutionCode) || "BHC",
+    collectionCode: clean(data.collectionCode) || "BHC Entomology",
     publicationStatus: existing?.publicationStatus || "draft",
     syncStatus: "queued",
     version: (existing?.version || 0) + 1,
@@ -874,7 +938,23 @@ async function updateSelectedStatus(status, { overrideReason = "" } = {}) {
     const publicationOverride = status === "published" && outstandingViews.length
       ? { scope: "research-photography", reason: clean(overrideReason), decidedBy: "data-manager", decidedAt: decisionAt, outstandingViews }
       : record.publicationOverride || null;
-    await putRecord({ ...record, publicationStatus: status, publicationOverride, publishedAt: status === "published" ? decisionAt : record.publishedAt || null, syncStatus: "queued", version: record.version + 1, updatedAt: decisionAt });
+    await putRecord({
+      ...record,
+      localityPrivacy: clean(record.localityPrivacy) || "withheld",
+      rightsHolder: clean(record.rightsHolder) || "Bio-Heritage Collections",
+      recordLicense: clean(record.recordLicense) || "All rights reserved",
+      imageCredit: clean(record.imageCredit) || "Tate / Bio-Heritage Collections",
+      imageLicense: clean(record.imageLicense) || "All rights reserved",
+      institutionName: clean(record.institutionName) || "Bio-Heritage Collections",
+      institutionCode: clean(record.institutionCode) || "BHC",
+      collectionCode: clean(record.collectionCode) || "BHC Entomology",
+      publicationStatus: status,
+      publicationOverride,
+      publishedAt: status === "published" ? decisionAt : record.publishedAt || null,
+      syncStatus: "queued",
+      version: record.version + 1,
+      updatedAt: decisionAt,
+    });
   }
   await refreshState();
   toast(`${chosen.length} record${chosen.length === 1 ? "" : "s"} marked ${status}${clean(overrideReason) ? " with a documented manager override" : ""}.`);
@@ -892,14 +972,16 @@ function download(name, type, content) {
 
 function csvCell(value) { return `"${String(value ?? "").replaceAll('"', '""')}"`; }
 function exportCsv() {
-  const columns = ["occurrenceID", "catalogNumber", "scientificName", "vernacularName", "eventDate", "country", "stateProvince", "county", "locality", "decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters", "recordedBy", "samplingProtocol", "habitat", "sex", "lifeStage", "preparations", "occurrenceStatus", "basisOfRecord", "associatedMedia", "photographicViews", "photographicOmissions", "photographicCaptureMetadata"];
+  const columns = ["occurrenceID", "catalogNumber", "scientificName", "scientificNameAuthorship", "vernacularName", "identifiedBy", "dateIdentified", "identificationRemarks", "eventDate", "country", "stateProvince", "county", "locality", "decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters", "recordedBy", "samplingProtocol", "habitat", "sex", "lifeStage", "preparations", "institutionCode", "collectionCode", "rightsHolder", "license", "informationWithheld", "dataGeneralizations", "occurrenceStatus", "basisOfRecord", "associatedMedia", "photographicViews", "photographicOmissions", "photographicCaptureMetadata"];
   const rows = state.records.map((record) => {
     const media = storedMediaFor(record.id);
     const views = [...new Set(media.map((item) => item.photoLabel || protocolSlot(item.photoType)?.label).filter(Boolean))].join(" | ");
     const omissions = Object.entries(record.photoOmissions || {}).map(([id, reason]) => `${protocolSlot(id)?.label || id}: ${PHOTO_OMISSION_LABELS[reason] || reason}`).join(" | ");
     const associatedMedia = media.map((item) => item.publicUrl).filter(Boolean).join(" | ");
     const captureMetadata = JSON.stringify(media.map((item) => ({ fileName: item.fileName, view: item.photoLabel || protocolSlot(item.photoType)?.label || item.photoType, orientation: item.orientation || "", ...(item.captureMetadata || {}) })));
-    return [record.id, record.catalogNumber, record.scientificName, record.commonName, record.eventDateStart, record.country, record.stateProvince, record.county, [record.locality, record.site].filter(Boolean).join(" — "), record.latitude, record.longitude, record.coordinateUncertainty, record.collector, record.samplingMethod, record.habitat, record.sex, record.lifeStage, record.preservation, "present", "PreservedSpecimen", associatedMedia, views, omissions, captureMetadata];
+    const informationWithheld = record.localityPrivacy === "open" ? "" : "Exact locality and coordinates";
+    const dataGeneralizations = record.localityPrivacy === "generalized" ? (record.publicLocality || "Locality generalized to state/province and country") : "";
+    return [record.id, record.catalogNumber, record.scientificName, record.scientificNameAuthorship, record.commonName, record.identifiedBy, record.dateIdentified, record.identificationRemarks, record.eventDateStart, record.country, record.stateProvince, record.county, [record.locality, record.site].filter(Boolean).join(" — "), record.latitude, record.longitude, record.coordinateUncertainty, record.collector, record.samplingMethod, record.habitat, record.sex, record.lifeStage, record.preservation, record.institutionCode, record.collectionCode, record.rightsHolder, record.recordLicense, informationWithheld, dataGeneralizations, "present", "PreservedSpecimen", associatedMedia, views, omissions, captureMetadata];
   });
   download(`bhc-occurrences-${today()}.csv`, "text/csv;charset=utf-8", [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n"));
 }
