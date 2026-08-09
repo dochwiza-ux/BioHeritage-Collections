@@ -15,7 +15,7 @@ for (const size of [192, 512]) {
   await writeFile(join(dist, "client", `icon-${size}.png`), makeIcon(size));
 }
 
-const sourceFiles = ["index.html", "app.css", "app.js", "db.js", "sw.js", "manifest.webmanifest", "logo.png"];
+const sourceFiles = ["index.html", "app.css", "app.js", "db.js", "sw.js", "manifest.webmanifest", "logo.png", "og.png"];
 const manifest = {};
 for (const file of sourceFiles) manifest[file] = Buffer.byteLength(await readFile(join(dist, "client", file)));
 await writeFile(join(dist, "client", "asset-manifest.json"), JSON.stringify(manifest, null, 2));
