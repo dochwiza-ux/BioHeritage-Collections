@@ -1,4 +1,4 @@
-import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=1.8.1";
+import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=1.9.0";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -58,6 +58,7 @@ const imageViewer = {
   originX: 0,
   originY: 0,
   objectUrl: "",
+  navigatorPointerId: null,
 };
 
 function uid(prefix) {
@@ -80,7 +81,7 @@ function protocolSlot(id) {
 }
 
 function storedMediaFor(recordId = state.editingRecordId) {
-  return recordId ? state.media.filter((item) => item.recordId === recordId) : [];
+  return recordId ? state.media.filter((item) => item.recordId === recordId && item.syncStatus !== "delete-queued") : [];
 }
 
 function photoReviewFor(record) {
@@ -204,6 +205,55 @@ function applyImageViewerTransform() {
   $("#image-zoom-in").disabled = imageViewer.scale >= 6;
   $$("#image-pan-left, #image-pan-up, #image-pan-down, #image-pan-right").forEach((button) => { button.disabled = imageViewer.scale <= 1; });
   $("#image-viewer-stage").classList.toggle("can-pan", imageViewer.scale > 1);
+  updateImageViewerNavigator();
+}
+
+function imageViewerNavigatorBox() {
+  const navigatorElement = $("#image-viewer-navigator");
+  const image = $("#image-viewer-image");
+  if (!navigatorElement || !image?.naturalWidth || !image?.naturalHeight) return null;
+  const width = navigatorElement.clientWidth;
+  const height = navigatorElement.clientHeight;
+  const imageRatio = image.naturalWidth / image.naturalHeight;
+  const boxRatio = width / height;
+  if (imageRatio > boxRatio) {
+    const renderedHeight = width / imageRatio;
+    return { left: 0, top: (height - renderedHeight) / 2, width, height: renderedHeight };
+  }
+  const renderedWidth = height * imageRatio;
+  return { left: (width - renderedWidth) / 2, top: 0, width: renderedWidth, height };
+}
+
+function updateImageViewerNavigator() {
+  const box = imageViewerNavigatorBox();
+  const viewport = $("#image-viewer-viewport");
+  const stage = $("#image-viewer-stage");
+  const image = $("#image-viewer-image");
+  if (!box || !viewport || !stage || !image) return;
+  const fullWidth = Math.max(1, image.offsetWidth * imageViewer.scale);
+  const fullHeight = Math.max(1, image.offsetHeight * imageViewer.scale);
+  const visibleWidth = clamp(stage.clientWidth / fullWidth, 0, 1);
+  const visibleHeight = clamp(stage.clientHeight / fullHeight, 0, 1);
+  const centreX = clamp(0.5 - imageViewer.x / fullWidth, visibleWidth / 2, 1 - visibleWidth / 2);
+  const centreY = clamp(0.5 - imageViewer.y / fullHeight, visibleHeight / 2, 1 - visibleHeight / 2);
+  viewport.style.left = `${box.left + (centreX - visibleWidth / 2) * box.width}px`;
+  viewport.style.top = `${box.top + (centreY - visibleHeight / 2) * box.height}px`;
+  viewport.style.width = `${visibleWidth * box.width}px`;
+  viewport.style.height = `${visibleHeight * box.height}px`;
+}
+
+function focusImageViewerArea(clientX, clientY) {
+  const navigatorElement = $("#image-viewer-navigator");
+  const image = $("#image-viewer-image");
+  const box = imageViewerNavigatorBox();
+  if (!navigatorElement || !image || !box) return;
+  const bounds = navigatorElement.getBoundingClientRect();
+  const normalizedX = clamp((clientX - bounds.left - box.left) / box.width, 0, 1);
+  const normalizedY = clamp((clientY - bounds.top - box.top) / box.height, 0, 1);
+  if (imageViewer.scale <= 1) imageViewer.scale = 3;
+  imageViewer.x = (0.5 - normalizedX) * image.offsetWidth * imageViewer.scale;
+  imageViewer.y = (0.5 - normalizedY) * image.offsetHeight * imageViewer.scale;
+  applyImageViewerTransform();
 }
 
 function resetImageViewer() {
@@ -238,6 +288,7 @@ function releaseImageViewerSource() {
     image.removeAttribute("src");
     image.alt = "";
   }
+  $("#image-viewer-navigator-image")?.removeAttribute("src");
 }
 
 function openImageViewer(item, record) {
@@ -251,6 +302,7 @@ function openImageViewer(item, record) {
   $("#image-viewer-title").textContent = `${label} · ${record.catalogNumber || titleFor(record)}`;
   image.onload = resetImageViewer;
   image.src = item.publicUrl || imageViewer.objectUrl;
+  $("#image-viewer-navigator-image").src = image.src;
   dialog.showModal();
   resetImageViewer();
   $("#image-viewer-stage").focus();
@@ -269,6 +321,26 @@ function bindImageViewer() {
   $("#image-pan-down").addEventListener("click", () => panImageViewer(0, 60));
   $("#image-pan-right").addEventListener("click", () => panImageViewer(60, 0));
   $("#image-view-reset").addEventListener("click", resetImageViewer);
+  const navigatorElement = $("#image-viewer-navigator");
+  navigatorElement.addEventListener("pointerdown", (event) => {
+    imageViewer.navigatorPointerId = event.pointerId;
+    navigatorElement.setPointerCapture?.(event.pointerId);
+    focusImageViewerArea(event.clientX, event.clientY);
+  });
+  navigatorElement.addEventListener("pointermove", (event) => {
+    if (event.pointerId === imageViewer.navigatorPointerId) focusImageViewerArea(event.clientX, event.clientY);
+  });
+  const stopNavigator = (event) => {
+    if (event.pointerId === imageViewer.navigatorPointerId) imageViewer.navigatorPointerId = null;
+  };
+  navigatorElement.addEventListener("pointerup", stopNavigator);
+  navigatorElement.addEventListener("pointercancel", stopNavigator);
+  navigatorElement.addEventListener("keydown", (event) => {
+    if (!["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    const bounds = navigatorElement.getBoundingClientRect();
+    focusImageViewerArea(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+  });
   stage.addEventListener("wheel", (event) => {
     event.preventDefault();
     zoomImageViewer(event.deltaY < 0 ? 0.25 : -0.25);
@@ -289,6 +361,7 @@ function bindImageViewer() {
     actions[event.key]();
   });
   stage.addEventListener("pointerdown", (event) => {
+    if (event.target.closest?.("#image-viewer-navigator")) return;
     if (imageViewer.scale <= 1) return;
     imageViewer.dragging = true;
     imageViewer.pointerId = event.pointerId;
@@ -430,7 +503,7 @@ function citationFor(record) {
   if (clean(record.preferredCitation)) return clean(record.preferredCitation);
   const year = new Date(record.publishedAt || record.updatedAt || Date.now()).getFullYear();
   const repository = clean(record.institutionName) || "Bio-Heritage Collections";
-  return `${repository} (${year}). ${record.catalogNumber || "Uncatalogued specimen"}: ${scientificNameFor(record)}. BHC Public Collection.`;
+  return `${repository} (${year}). ${record.catalogNumber || "Uncatalogued specimen"}: ${scientificNameFor(record)}. BHC Virtual Collections.`;
 }
 
 function publicCaptureMetadata(item, record) {
@@ -454,7 +527,7 @@ async function refreshState() {
 
 function renderAll() {
   const queuedRecords = state.records.filter((record) => record.syncStatus === "queued").length;
-  const queuedMedia = state.media.filter((item) => item.syncStatus === "queued").length;
+  const queuedMedia = state.media.filter((item) => ["queued", "delete-queued"].includes(item.syncStatus)).length;
   const queued = queuedRecords + queuedMedia;
   const ready = state.records.filter((record) => record.publicationStatus === "ready").length;
   const published = state.records.filter((record) => record.publicationStatus === "published").length;
@@ -819,7 +892,10 @@ function renderMediaPreview() {
     const source = data.publicUrl || data.previewUrl || "";
     const label = data.photoLabel || protocolSlot(data.photoType)?.label || "Additional image";
     const details = [data.orientation ? `${data.orientation} side` : "", captureSummary(data.captureMetadata)].filter(Boolean).join(" · ");
-    return `<figure class="media-thumb">${source ? `<img src="${escapeAttribute(source)}" alt="Preview of ${escapeAttribute(fileName)}">` : `<span class="media-file-fallback">${escapeHtml(fileName)}</span>`}${item.stored ? "" : `<button type="button" data-remove-file="${item.index}" aria-label="Remove ${escapeAttribute(fileName)}">×</button>`}<figcaption>${escapeHtml(label)}${details ? `<span>${escapeHtml(details)}</span>` : ""}</figcaption></figure>`;
+    const removeControl = item.stored
+      ? `<button type="button" data-remove-stored-media="${escapeAttribute(data.id)}" aria-label="Remove saved photograph ${escapeAttribute(fileName)}">×</button>`
+      : `<button type="button" data-remove-file="${item.index}" aria-label="Remove ${escapeAttribute(fileName)}">×</button>`;
+    return `<figure class="media-thumb">${source ? `<img src="${escapeAttribute(source)}" alt="Preview of ${escapeAttribute(fileName)}">` : `<span class="media-file-fallback">${escapeHtml(fileName)}</span>`}${removeControl}<figcaption>${escapeHtml(label)}${details ? `<span>${escapeHtml(details)}</span>` : ""}</figcaption></figure>`;
   }).join("");
   $$('[data-remove-file]', host).forEach((button) => button.addEventListener("click", () => {
     const [removed] = state.pendingFiles.splice(Number(button.dataset.removeFile), 1);
@@ -827,6 +903,23 @@ function renderMediaPreview() {
     renderPhotoProtocol();
     renderMediaPreview();
   }));
+  $$('[data-remove-stored-media]', host).forEach((button) => button.addEventListener("click", () => queueStoredMediaRemoval(button.dataset.removeStoredMedia)));
+}
+
+async function queueStoredMediaRemoval(id) {
+  const item = state.media.find((candidate) => candidate.id === id && candidate.recordId === state.editingRecordId);
+  if (!item || !confirm(`Remove ${item.fileName || "this photograph"} from this specimen?`)) return;
+  if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+  if (item.syncStatus === "queued" || !item.publicUrl) {
+    await removeMedia(item.id);
+  } else {
+    await putMedia({ ...item, syncStatus: "delete-queued", updatedAt: isoNow() });
+  }
+  state.media = await getMedia();
+  renderPhotoProtocol();
+  renderMediaPreview();
+  toast(navigator.onLine ? "The photograph is being removed from the device and Cloud archive." : "The photograph will be removed from the Cloud archive when this device reconnects.");
+  if (navigator.onLine) syncNow({ quiet: true });
 }
 
 function fillDataList(id, values) {
@@ -877,7 +970,13 @@ async function syncNow({ quiet = false } = {}) {
         if (record) await putRecord({ ...record, syncStatus: "synced", syncedAt: isoNow() });
       }
     }
-    const queuedMedia = state.media.filter((item) => item.syncStatus === "queued");
+    const queuedDeletions = state.media.filter((item) => item.syncStatus === "delete-queued");
+    for (const item of queuedDeletions) {
+      const response = await fetch(`/media/${encodeURIComponent(item.id)}`, { method: "DELETE" });
+      if (!response.ok && response.status !== 404) throw new Error("A photograph could not be removed from the Cloud archive.");
+      await removeMedia(item.id);
+    }
+    const queuedMedia = (await getMedia()).filter((item) => item.syncStatus === "queued");
     for (const item of queuedMedia) {
       const data = new FormData();
       data.append("id", item.id); data.append("recordId", item.recordId); data.append("file", item.blob, item.fileName);
@@ -1032,6 +1131,69 @@ function bindGoButtons(root = document) {
   $$('[data-go]', root).forEach((button) => button.addEventListener("click", () => setView(button.dataset.go)));
 }
 
+function setPublicPanel(name) {
+  $$('[data-public-panel-button]').forEach((button) => {
+    const active = button.dataset.publicPanelButton === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  $$('[data-public-panel]').forEach((panel) => {
+    const active = panel.dataset.publicPanel === name;
+    panel.hidden = !active;
+    panel.classList.toggle("active", active);
+  });
+  if (name === "collection") renderCatalogue();
+}
+
+function correctionFileSummary() {
+  const input = $("#correction-files");
+  const summary = $("#correction-file-summary");
+  if (!input || !summary) return;
+  const files = [...input.files];
+  summary.textContent = files.length
+    ? `${files.length} selected: ${files.map((file) => file.name).join(", ")}. Attach ${files.length === 1 ? "it" : "them"} in the email window before sending.`
+    : "Choose up to five images or PDF references. Your email app will ask you to attach the selected files before sending.";
+}
+
+function prepareCorrectionEmail(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  if (!form.reportValidity()) return;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const files = [...$("#correction-files").files];
+  if (files.length > 5) {
+    toast("Choose no more than five supporting files.");
+    return;
+  }
+  const recordReference = clean(data.recordReference);
+  const lines = [
+    "BHC Virtual Collections correction suggestion",
+    "",
+    `Record or catalogue number: ${recordReference}`,
+    `Field to correct: ${clean(data.fieldName) || "Not specified"}`,
+    `Suggested correction: ${clean(data.correction)}`,
+    `References: ${clean(data.references) || "None supplied"}`,
+    `Reporter: ${clean(data.reporterName) || "Anonymous"}`,
+    `Reply email: ${clean(data.reporterEmail) || "Not supplied"}`,
+    `Supporting files selected: ${files.length ? files.map((file) => file.name).join(", ") : "None"}`,
+    "",
+    files.length ? "Please attach the selected supporting files to this email before sending." : "",
+  ].filter((line) => line !== "");
+  $("#correction-email-help").textContent = files.length
+    ? "Your addressed email is opening. Use its attachment button to add the files named in the message, then review and send."
+    : "Your addressed email is opening. Review the prepared message and send it when ready.";
+  window.location.href = `mailto:dochwiza@gmail.com?subject=${encodeURIComponent(`BHC data correction — ${recordReference}`)}&body=${encodeURIComponent(lines.join("\r\n"))}`;
+}
+
+function bindPublicNavigation() {
+  const tabs = $(".visitor-tabs");
+  if (!tabs || tabs.dataset.bound) return;
+  tabs.dataset.bound = "true";
+  $$('[data-public-panel-button]', tabs).forEach((button) => button.addEventListener("click", () => setPublicPanel(button.dataset.publicPanelButton)));
+  $("#correction-form").addEventListener("submit", prepareCorrectionEmail);
+  $("#correction-files").addEventListener("change", correctionFileSummary);
+}
+
 function bindEvents() {
   $$(".nav-item").forEach((button) => button.addEventListener("click", () => setView(button.dataset.view)));
   bindGoButtons();
@@ -1078,14 +1240,16 @@ function bindEvents() {
   $("#install-button").addEventListener("click", async () => { if (!state.installPrompt) return; state.installPrompt.prompt(); await state.installPrompt.userChoice; state.installPrompt = null; $("#install-button").hidden = true; });
   $("#close-specimen-dialog").addEventListener("click", () => $("#specimen-dialog").close());
   bindImageViewer();
+  bindPublicNavigation();
 }
 
 async function initializeVisitor() {
   document.body.classList.add("visitor-mode");
-  document.title = "BHC Public Collection";
+  document.title = "BHC Virtual Collections";
   $("#catalogue-search").addEventListener("input", renderCatalogue);
   $("#close-specimen-dialog").addEventListener("click", () => $("#specimen-dialog").close());
   bindImageViewer();
+  bindPublicNavigation();
   if ("serviceWorker" in navigator) await navigator.serviceWorker.register("/sw.js");
   try {
     state.records = await getRecords();

@@ -1,4 +1,4 @@
-# BHC Field v1.8.1
+# BHC Field v1.9.0
 
 BHC Field is an offline-first biodiversity collection app for Bio-Heritage Collections. It captures
 specimen identity, country-first locations, collection events, preparation
@@ -16,7 +16,7 @@ The app includes:
 - conflict-safe synchronization using client-generated IDs and timestamps;
 - authenticated write endpoints and anonymous read-only public records;
 - publication review checks with an audited manager override;
-- a visitor-only public catalogue with full specimen image galleries, an interactive zoom-and-pan viewer, signed public images and direct research-photo requests;
+- visitor-facing Virtual Collections with specimen galleries, a draggable image-area navigator, correction suggestions, an About page, signed images and research-photo requests;
 - Darwin Core-style CSV export and JSON backup/restore.
 
 Run `node build/build.mjs` to create `dist/`. The deployable Worker is emitted
