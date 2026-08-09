@@ -1,4 +1,4 @@
-import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=1.9.0";
+import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=2.0.0";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -31,6 +31,7 @@ const state = {
   media: [],
   catalogueRecords: [],
   catalogueMedia: [],
+  catalogueObjectUrls: new Map(),
   selected: new Set(),
   pendingFiles: [],
   editingRecordId: null,
@@ -59,6 +60,16 @@ const imageViewer = {
   originY: 0,
   objectUrl: "",
   navigatorPointerId: null,
+  tool: "pan",
+  action: "",
+  originScale: 1,
+  lastMiddleClickAt: 0,
+};
+
+const homeShowcase = {
+  frontViews: [],
+  index: -1,
+  timer: null,
 };
 
 function uid(prefix) {
@@ -208,6 +219,21 @@ function applyImageViewerTransform() {
   updateImageViewerNavigator();
 }
 
+function setImageViewerTool(tool = "pan") {
+  imageViewer.tool = ["pan", "window", "drag-zoom"].includes(tool) ? tool : "pan";
+  const windowButton = $("#image-zoom-window");
+  const dragButton = $("#image-drag-zoom");
+  const stage = $("#image-viewer-stage");
+  if (windowButton) windowButton.setAttribute("aria-pressed", String(imageViewer.tool === "window"));
+  if (dragButton) dragButton.setAttribute("aria-pressed", String(imageViewer.tool === "drag-zoom"));
+  stage?.classList.toggle("zoom-window-mode", imageViewer.tool === "window");
+  stage?.classList.toggle("drag-zoom-mode", imageViewer.tool === "drag-zoom");
+  if (imageViewer.tool !== "window") {
+    const box = $("#image-zoom-window-box");
+    if (box) box.hidden = true;
+  }
+}
+
 function imageViewerNavigatorBox() {
   const navigatorElement = $("#image-viewer-navigator");
   const image = $("#image-viewer-image");
@@ -263,8 +289,44 @@ function resetImageViewer() {
   applyImageViewerTransform();
 }
 
-function zoomImageViewer(change) {
-  imageViewer.scale = clamp(Math.round((imageViewer.scale + change) * 100) / 100, 1, 6);
+function setImageViewerScale(nextScale, clientX, clientY) {
+  const stage = $("#image-viewer-stage");
+  const previousScale = imageViewer.scale;
+  const scale = clamp(Math.round(nextScale * 100) / 100, 1, 6);
+  if (stage && Number.isFinite(clientX) && Number.isFinite(clientY) && previousScale > 0) {
+    const bounds = stage.getBoundingClientRect();
+    const anchorX = clientX - bounds.left - bounds.width / 2;
+    const anchorY = clientY - bounds.top - bounds.height / 2;
+    const imagePointX = (anchorX - imageViewer.x) / previousScale;
+    const imagePointY = (anchorY - imageViewer.y) / previousScale;
+    imageViewer.x = anchorX - imagePointX * scale;
+    imageViewer.y = anchorY - imagePointY * scale;
+  }
+  imageViewer.scale = scale;
+  applyImageViewerTransform();
+}
+
+function zoomImageViewer(change, clientX, clientY) {
+  setImageViewerScale(imageViewer.scale + change, clientX, clientY);
+}
+
+function zoomImageViewerWindow(startX, startY, endX, endY) {
+  const stage = $("#image-viewer-stage");
+  if (!stage) return;
+  const width = Math.abs(endX - startX);
+  const height = Math.abs(endY - startY);
+  if (width < 12 || height < 12) return;
+  const bounds = stage.getBoundingClientRect();
+  const centreClientX = (startX + endX) / 2;
+  const centreClientY = (startY + endY) / 2;
+  const centreX = centreClientX - bounds.left - bounds.width / 2;
+  const centreY = centreClientY - bounds.top - bounds.height / 2;
+  const imagePointX = (centreX - imageViewer.x) / imageViewer.scale;
+  const imagePointY = (centreY - imageViewer.y) / imageViewer.scale;
+  const nextScale = clamp(imageViewer.scale * Math.min(stage.clientWidth / width, stage.clientHeight / height), 1, 6);
+  imageViewer.scale = Math.round(nextScale * 100) / 100;
+  imageViewer.x = -imagePointX * imageViewer.scale;
+  imageViewer.y = -imagePointY * imageViewer.scale;
   applyImageViewerTransform();
 }
 
@@ -273,6 +335,78 @@ function panImageViewer(changeX, changeY) {
   imageViewer.x += changeX;
   imageViewer.y += changeY;
   applyImageViewerTransform();
+}
+
+function catalogueMediaSource(item) {
+  if (!item) return "";
+  if (item.publicUrl) return item.publicUrl;
+  if (!item.blob) return "";
+  if (!state.catalogueObjectUrls.has(item.id)) state.catalogueObjectUrls.set(item.id, URL.createObjectURL(item.blob));
+  return state.catalogueObjectUrls.get(item.id);
+}
+
+function clearCatalogueObjectUrls() {
+  state.catalogueObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+  state.catalogueObjectUrls.clear();
+}
+
+function randomIndex(length, previous = -1) {
+  if (length <= 1) return length ? 0 : -1;
+  const random = crypto.getRandomValues(new Uint32Array(1))[0] % length;
+  return random === previous ? (random + 1) % length : random;
+}
+
+function showNextHomeFrontView() {
+  const image = $("#home-feature-image");
+  const caption = $("#home-feature-caption");
+  const button = $("#home-feature-shuffle");
+  if (!image || !caption || !button) return;
+  if (!homeShowcase.frontViews.length) {
+    image.src = "/og.png";
+    image.alt = "BHC — Digitizing nature, connecting the world.";
+    caption.textContent = "Discover research photographs and carefully documented specimen records.";
+    button.disabled = true;
+    return;
+  }
+  homeShowcase.index = randomIndex(homeShowcase.frontViews.length, homeShowcase.index);
+  const { item, record } = homeShowcase.frontViews[homeShowcase.index];
+  const source = catalogueMediaSource(item);
+  const label = item.photoLabel || protocolSlot(item.photoType)?.label || "Front view";
+  image.src = source;
+  image.alt = `${titleFor(record)} — ${label}`;
+  caption.textContent = `${label} · ${record.catalogNumber || titleFor(record)} · ${scientificNameFor(record)}`;
+  button.disabled = homeShowcase.frontViews.length < 2;
+}
+
+function renderHomeShowcase(records, media) {
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+  homeShowcase.frontViews = media
+    .filter((item) => item.photoType === "head-frontal" && recordsById.has(item.recordId) && isDisplayableMime(item.mimeType || item.blob?.type) && catalogueMediaSource(item))
+    .map((item) => ({ item, record: recordsById.get(item.recordId) }));
+  homeShowcase.index = -1;
+  showNextHomeFrontView();
+  clearInterval(homeShowcase.timer);
+  homeShowcase.timer = homeShowcase.frontViews.length > 1 ? setInterval(showNextHomeFrontView, 9000) : null;
+}
+
+function renderLatestAdditions(records, media) {
+  const host = $("#latest-additions");
+  const empty = $("#latest-empty");
+  if (!host || !empty) return;
+  const latest = [...records]
+    .sort((a, b) => Date.parse(b.publishedAt || b.updatedAt || b.createdAt || 0) - Date.parse(a.publishedAt || a.updatedAt || a.createdAt || 0))
+    .slice(0, 6);
+  empty.hidden = latest.length > 0;
+  host.innerHTML = latest.map((record) => {
+    const recordMedia = media.filter((item) => item.recordId === record.id && isDisplayableMime(item.mimeType || item.blob?.type));
+    const image = recordMedia.find((item) => item.photoType === "habitus-dorsal") || recordMedia.find((item) => item.photoType === "head-frontal") || recordMedia[0];
+    const source = catalogueMediaSource(image);
+    return `<button type="button" class="latest-card" data-open-specimen="${escapeAttribute(record.id)}" aria-label="Open ${escapeAttribute(record.catalogNumber || titleFor(record))}">
+      <span class="latest-card-image">${source ? `<img src="${escapeAttribute(source)}" alt="${escapeAttribute(`${titleFor(record)} — ${image.photoLabel || "specimen photograph"}`)}"><span class="photo-signature" aria-hidden="true">tate</span>` : `<span class="monogram">${escapeHtml(initials(record))}</span>`}</span>
+      <span class="latest-card-copy"><small>${escapeHtml(record.catalogNumber || "New record")}</small><strong><i>${escapeHtml(scientificNameFor(record))}</i></strong><span>${escapeHtml(publicLocationFor(record))}</span></span>
+    </button>`;
+  }).join("");
+  $$('[data-open-specimen]', host).forEach((button) => button.addEventListener("click", () => openSpecimen(button.dataset.openSpecimen)));
 }
 
 function closeImageViewer() {
@@ -321,6 +455,8 @@ function bindImageViewer() {
   $("#image-pan-down").addEventListener("click", () => panImageViewer(0, 60));
   $("#image-pan-right").addEventListener("click", () => panImageViewer(60, 0));
   $("#image-view-reset").addEventListener("click", resetImageViewer);
+  $("#image-zoom-window").addEventListener("click", () => setImageViewerTool(imageViewer.tool === "window" ? "pan" : "window"));
+  $("#image-drag-zoom").addEventListener("click", () => setImageViewerTool(imageViewer.tool === "drag-zoom" ? "pan" : "drag-zoom"));
   const navigatorElement = $("#image-viewer-navigator");
   navigatorElement.addEventListener("pointerdown", (event) => {
     imageViewer.navigatorPointerId = event.pointerId;
@@ -343,7 +479,8 @@ function bindImageViewer() {
   });
   stage.addEventListener("wheel", (event) => {
     event.preventDefault();
-    zoomImageViewer(event.deltaY < 0 ? 0.25 : -0.25);
+    const factor = event.deltaY < 0 ? 1.18 : 1 / 1.18;
+    setImageViewerScale(imageViewer.scale * factor, event.clientX, event.clientY);
   }, { passive: false });
   stage.addEventListener("keydown", (event) => {
     const actions = {
@@ -355,6 +492,7 @@ function bindImageViewer() {
       "=": () => zoomImageViewer(0.25),
       "-": () => zoomImageViewer(-0.25),
       "0": resetImageViewer,
+      Home: resetImageViewer,
     };
     if (!actions[event.key]) return;
     event.preventDefault();
@@ -362,35 +500,82 @@ function bindImageViewer() {
   });
   stage.addEventListener("pointerdown", (event) => {
     if (event.target.closest?.("#image-viewer-navigator")) return;
-    if (imageViewer.scale <= 1) return;
+    if (event.button === 1) {
+      const now = performance.now();
+      if (now - imageViewer.lastMiddleClickAt < 450) resetImageViewer();
+      imageViewer.lastMiddleClickAt = now;
+      event.preventDefault();
+      return;
+    }
+    if (event.button !== 0) return;
+    if (imageViewer.tool === "pan" && imageViewer.scale <= 1) return;
     imageViewer.dragging = true;
     imageViewer.pointerId = event.pointerId;
     imageViewer.startX = event.clientX;
     imageViewer.startY = event.clientY;
     imageViewer.originX = imageViewer.x;
     imageViewer.originY = imageViewer.y;
+    imageViewer.originScale = imageViewer.scale;
+    imageViewer.action = imageViewer.tool === "window" ? "window" : (imageViewer.tool === "drag-zoom" ? "drag-zoom" : "pan");
     stage.setPointerCapture?.(event.pointerId);
     stage.classList.add("dragging");
+    if (imageViewer.action === "window") {
+      const bounds = stage.getBoundingClientRect();
+      const box = $("#image-zoom-window-box");
+      box.hidden = false;
+      box.style.left = `${event.clientX - bounds.left}px`;
+      box.style.top = `${event.clientY - bounds.top}px`;
+      box.style.width = "0";
+      box.style.height = "0";
+    }
   });
   stage.addEventListener("pointermove", (event) => {
     if (!imageViewer.dragging || event.pointerId !== imageViewer.pointerId) return;
-    imageViewer.x = imageViewer.originX + event.clientX - imageViewer.startX;
-    imageViewer.y = imageViewer.originY + event.clientY - imageViewer.startY;
-    applyImageViewerTransform();
+    if (imageViewer.action === "pan") {
+      imageViewer.x = imageViewer.originX + event.clientX - imageViewer.startX;
+      imageViewer.y = imageViewer.originY + event.clientY - imageViewer.startY;
+      applyImageViewerTransform();
+      return;
+    }
+    if (imageViewer.action === "drag-zoom") {
+      const factor = Math.exp((imageViewer.startY - event.clientY) / 160);
+      setImageViewerScale(imageViewer.originScale * factor, imageViewer.startX, imageViewer.startY);
+      return;
+    }
+    if (imageViewer.action === "window") {
+      const bounds = stage.getBoundingClientRect();
+      const box = $("#image-zoom-window-box");
+      box.style.left = `${Math.min(imageViewer.startX, event.clientX) - bounds.left}px`;
+      box.style.top = `${Math.min(imageViewer.startY, event.clientY) - bounds.top}px`;
+      box.style.width = `${Math.abs(event.clientX - imageViewer.startX)}px`;
+      box.style.height = `${Math.abs(event.clientY - imageViewer.startY)}px`;
+    }
   });
   const stopDragging = (event) => {
     if (!imageViewer.dragging || (event.pointerId !== undefined && event.pointerId !== imageViewer.pointerId)) return;
+    if (imageViewer.action === "window" && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+      zoomImageViewerWindow(imageViewer.startX, imageViewer.startY, event.clientX, event.clientY);
+      setImageViewerTool("pan");
+    }
     imageViewer.dragging = false;
     imageViewer.pointerId = null;
+    imageViewer.action = "";
     stage.classList.remove("dragging");
+    const box = $("#image-zoom-window-box");
+    if (box) box.hidden = true;
   };
   stage.addEventListener("pointerup", stopDragging);
   stage.addEventListener("pointercancel", stopDragging);
+  stage.addEventListener("dblclick", (event) => {
+    if (imageViewer.tool !== "pan" || event.target.closest?.("#image-viewer-navigator")) return;
+    resetImageViewer();
+  });
   dialog.addEventListener("close", () => {
     stopDragging({});
     releaseImageViewerSource();
   });
   window.addEventListener("resize", applyImageViewerTransform);
+  setImageViewerTool("pan");
   resetImageViewer();
 }
 
@@ -705,27 +890,31 @@ async function renderCatalogue() {
       }
     } catch { /* local catalogue remains available */ }
   }
+  const allPublished = [...published];
   const query = clean($("#catalogue-search")?.value).toLowerCase();
-  published = published.filter((record) => [record.catalogNumber, record.scientificName, record.scientificNameAuthorship, record.commonName, record.order, record.family, publicLocationFor(record)].join(" ").toLowerCase().includes(query));
+  published = allPublished.filter((record) => [record.catalogNumber, record.scientificName, record.scientificNameAuthorship, record.commonName, record.order, record.family, publicLocationFor(record)].join(" ").toLowerCase().includes(query));
   const host = $("#catalogue-grid");
-  state.catalogueRecords = published;
+  clearCatalogueObjectUrls();
+  state.catalogueRecords = allPublished;
   state.catalogueMedia = media;
   const sourceStatus = $("#catalogue-source-status");
   if (sourceStatus) sourceStatus.textContent = state.localPreview
-    ? `Local preview: showing ${published.length} published record${published.length === 1 ? "" : "s"} and photographs saved on this device.`
+    ? `Local preview: showing ${allPublished.length} published record${allPublished.length === 1 ? "" : "s"} and photographs saved on this device.`
     : (cloudCatalogueAvailable ? "Showing specimen records reviewed and published by Bio-Heritage Collections." : "Cloud collection unavailable - showing the last published copy held on this device.");
   $("#catalogue-empty").hidden = published.length > 0;
   host.innerHTML = published.map((record) => {
     const allRecordMedia = media.filter((item) => item.recordId === record.id && (item.publicUrl || item.blob));
     const recordMedia = allRecordMedia.filter((item) => isDisplayableMime(item.mimeType || item.blob?.type));
     const image = recordMedia.find((item) => item.photoType === "habitus-dorsal") || recordMedia[0];
-    const source = image?.publicUrl || (image?.blob ? URL.createObjectURL(image.blob) : "");
+    const source = catalogueMediaSource(image);
     return `<article class="specimen-card">
-      <div class="specimen-image">${source ? `<img src="${escapeAttribute(source)}" alt="${escapeAttribute(`${titleFor(record)} — ${image.photoLabel || "specimen photograph"}`)}"><span class="photo-signature" aria-hidden="true">tate</span>` : `<span class="monogram">${escapeHtml(initials(record))}</span>`}</div>
+      <button type="button" class="specimen-image specimen-image-button" data-open-specimen="${escapeAttribute(record.id)}" aria-label="Open ${escapeAttribute(record.catalogNumber || titleFor(record))}">${source ? `<img src="${escapeAttribute(source)}" alt="${escapeAttribute(`${titleFor(record)} — ${image.photoLabel || "specimen photograph"}`)}"><span class="photo-signature" aria-hidden="true">tate</span>` : `<span class="monogram">${escapeHtml(initials(record))}</span>`}<span class="specimen-image-action">Open record</span></button>
       <div class="specimen-card-body"><span class="catalog-id">${escapeHtml(record.catalogNumber)}</span><h2><i>${escapeHtml(scientificNameFor(record))}</i></h2><p class="common">${escapeHtml(record.commonName || record.identificationStatus)}</p><div class="specimen-meta"><span>Collected<strong>${escapeHtml(record.eventDateStart || "Not recorded")}</strong></span><span>Public locality<strong>${escapeHtml(publicLocationFor(record))}</strong></span></div><div class="specimen-card-actions"><span>${allRecordMedia.length} photograph${allRecordMedia.length === 1 ? "" : "s"}</span><button class="button secondary compact" data-open-specimen="${record.id}">View record</button></div></div>
     </article>`;
   }).join("");
   $$('[data-open-specimen]', host).forEach((button) => button.addEventListener("click", () => openSpecimen(button.dataset.openSpecimen)));
+  renderLatestAdditions(allPublished, media);
+  renderHomeShowcase(allPublished, media);
 }
 
 function openSpecimen(id) {
@@ -736,7 +925,7 @@ function openSpecimen(id) {
   const requestHref = `mailto:dochwiza@gmail.com?subject=${requestSubject}&body=${requestBody}`;
   const media = state.catalogueMedia.filter((item) => item.recordId === id && (item.publicUrl || item.blob));
   const gallery = media.map((item) => {
-    const source = item.publicUrl || (item.blob ? URL.createObjectURL(item.blob) : "");
+    const source = catalogueMediaSource(item);
     const label = item.photoLabel || protocolSlot(item.photoType)?.label || "Specimen photograph";
     const orientation = item.orientation ? `${item.orientation} side` : "";
     const captureDetails = captureMetadataMarkup(publicCaptureMetadata(item, record));
@@ -1142,7 +1331,7 @@ function setPublicPanel(name) {
     panel.hidden = !active;
     panel.classList.toggle("active", active);
   });
-  if (name === "collection") renderCatalogue();
+  if (["home", "gallery"].includes(name)) renderCatalogue();
 }
 
 function correctionFileSummary() {
@@ -1190,6 +1379,8 @@ function bindPublicNavigation() {
   if (!tabs || tabs.dataset.bound) return;
   tabs.dataset.bound = "true";
   $$('[data-public-panel-button]', tabs).forEach((button) => button.addEventListener("click", () => setPublicPanel(button.dataset.publicPanelButton)));
+  $$('[data-open-gallery]').forEach((button) => button.addEventListener("click", () => setPublicPanel("gallery")));
+  $("#home-feature-shuffle")?.addEventListener("click", showNextHomeFrontView);
   $("#correction-form").addEventListener("submit", prepareCorrectionEmail);
   $("#correction-files").addEventListener("change", correctionFileSummary);
 }
