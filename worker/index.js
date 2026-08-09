@@ -276,6 +276,15 @@ async function uploadMedia(request, env) {
   return json({ id, photoType, photoLabel, orientation, captureMetadata, publicUrl: `/media/${encodeURIComponent(id)}` });
 }
 
+async function deleteMedia(request, env, id) {
+  const owner = await requireManager(request, env);
+  const row = await env.DB.prepare("SELECT r2_key FROM media WHERE id = ? AND owner_id = ?").bind(id, owner).first();
+  if (!row) return json({ deleted: false, id }, 404);
+  await env.DB.prepare("DELETE FROM media WHERE id = ? AND owner_id = ?").bind(id, owner).run();
+  await env.MEDIA.delete(row.r2_key);
+  return json({ deleted: true, id });
+}
+
 async function serveMedia(request, env, id) {
   const identity = await managerIdentity(request, env);
   const row = await env.DB.prepare(`
@@ -330,11 +339,23 @@ const worker = {
         if (!env.MEDIA) return json({ error: "Cloud image storage is not configured." }, 503);
         return serveMedia(request, env, decodeURIComponent(url.pathname.slice(7)));
       }
+      if (url.pathname.startsWith("/media/") && request.method === "DELETE") {
+        if (!env.MEDIA) return json({ error: "Cloud image storage is not configured." }, 503);
+        return deleteMedia(request, env, decodeURIComponent(url.pathname.slice(7)));
+      }
       if (url.pathname.startsWith("/api/")) return json({ error: "Not found." }, 404);
       const managerPath = url.pathname.replace(/\/+$/, "");
-      if (managerPath === "/manager" || managerPath.startsWith("/manager/")) await requireManager(request, env);
+      const isLegacyManager = managerPath === "/manager" || managerPath.startsWith("/manager/");
+      const isFieldArchive = managerPath === "/field-archive" || managerPath.startsWith("/field-archive/");
+      if (isLegacyManager) {
+        await requireManager(request, env);
+        const archiveUrl = new URL("/field-archive", url);
+        archiveUrl.search = url.search;
+        return Response.redirect(archiveUrl, 308);
+      }
+      if (isFieldArchive) await requireManager(request, env);
 
-      const assetRequest = isCatalogue || managerPath === "/manager" || managerPath.startsWith("/manager/") ? new Request(new URL("/", url), request) : request;
+      const assetRequest = isCatalogue || isFieldArchive ? new Request(new URL("/", url), request) : request;
       const asset = await env.ASSETS.fetch(assetRequest);
       const contentType = asset.headers.get("content-type") || "";
       if (contentType.includes("text/html")) {
