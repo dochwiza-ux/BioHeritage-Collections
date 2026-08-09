@@ -16,7 +16,7 @@
     <title>BHC Field</title>
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/logo.png" type="image/png">
-    <link rel="stylesheet" href="/app.css?v=1.8.1">
+    <link rel="stylesheet" href="/app.css?v=1.9.0">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -38,7 +38,7 @@
             <span class="status-dot" id="sidebar-dot"></span>
             <div><strong id="sidebar-status">Checking connection</strong><small id="sidebar-detail">Your work stays on this device</small></div>
           </div>
-          <p>Bio-Heritage Collections v1.8.1<br>Secure Cloud archive edition</p>
+          <p>Bio-Heritage Collections v1.9.0<br>Secure Cloud archive edition</p>
         </div>
       </aside>
 
@@ -241,20 +241,52 @@
           </section>
 
           <section class="view" id="view-catalogue" data-title="Catalogue">
-            <div class="visitor-brand"><img class="visitor-logo" src="/logo.png" alt="BHC logo"><div><strong>Bio-Heritage Collections</strong><small>PUBLIC COLLECTION</small></div></div>
-            <figure class="catalogue-hero"><img src="/og.png" width="1731" height="909" alt="BHC — Digitizing nature, connecting the world. An emerald specimen beetle beside a collection label and locality map."></figure>
-            <div class="catalogue-head"><div><p class="eyebrow">Bio-Heritage Collections</p><h1>Explore the collection.</h1><p>Published specimen records and research photographs, preserved for discovery and future study.</p><p class="catalogue-source-status" id="catalogue-source-status" aria-live="polite">Loading the published collection…</p></div><label class="catalogue-search">Search the collection<input id="catalogue-search" type="search" placeholder="Names, places or catalog numbers"></label></div>
-            <aside class="photo-request-line" aria-labelledby="photo-request-title">
-              <span class="request-mark" aria-hidden="true">@</span>
-              <div><p class="eyebrow">Research image requests</p><h2 id="photo-request-title">Need a specific picture or viewing angle?</h2><p>Visitors are welcome to contact Tate with the specimen name, catalogue number and the view required.</p></div>
-              <a class="button request-button" href="mailto:dochwiza@gmail.com?subject=BHC%20research%20photograph%20request&amp;body=Specimen%20name%20or%20catalogue%20number%3A%0D%0ARequested%20picture%20or%20viewing%20angle%3A%0D%0A">Email dochwiza@gmail.com</a>
-            </aside>
-            <section class="collection-policy" aria-labelledby="collection-policy-title">
-              <div><p class="eyebrow">Responsible research use</p><h2 id="collection-policy-title">Cite the record. Credit the image. Protect the locality.</h2></div>
-              <p>Every published specimen states its preferred citation and reuse terms. Photograph credit and licence are recorded per image where supplied. Exact locality data may be generalized or withheld to protect vulnerable species, private land and collecting sites.</p>
+            <div class="visitor-brand"><img class="visitor-logo" src="/logo.png" alt="BHC logo"><div><strong>Bio-Heritage Collections</strong><small>VIRTUAL COLLECTIONS</small></div></div>
+            <nav class="visitor-tabs" aria-label="Virtual Collections pages">
+              <button type="button" class="visitor-tab active" data-public-panel-button="collection" aria-controls="public-panel-collection" aria-selected="true">Virtual Collections</button>
+              <button type="button" class="visitor-tab" data-public-panel-button="corrections" aria-controls="public-panel-corrections" aria-selected="false">Suggest a correction</button>
+              <button type="button" class="visitor-tab" data-public-panel-button="about" aria-controls="public-panel-about" aria-selected="false">About us</button>
+            </nav>
+            <section class="public-panel active" id="public-panel-collection" data-public-panel="collection">
+              <figure class="catalogue-hero"><img src="/og.png" width="1731" height="909" alt="BHC — Digitizing nature, connecting the world. An emerald specimen beetle beside a collection label and locality map."></figure>
+              <div class="catalogue-head"><div><p class="eyebrow">Bio-Heritage Collections</p><h1>Explore the virtual collections.</h1><p>Published specimen records and research photographs, preserved for discovery and future study.</p><p class="catalogue-source-status" id="catalogue-source-status" aria-live="polite">Loading the published collection…</p></div><label class="catalogue-search">Search the collection<input id="catalogue-search" type="search" placeholder="Names, places or catalog numbers"></label></div>
+              <aside class="photo-request-line" aria-labelledby="photo-request-title">
+                <span class="request-mark" aria-hidden="true">@</span>
+                <div><p class="eyebrow">Research image requests</p><h2 id="photo-request-title">Need a specific picture or viewing angle?</h2><p>Visitors are welcome to contact Tate with the specimen name, catalogue number and the view required.</p></div>
+                <a class="button request-button" href="mailto:dochwiza@gmail.com?subject=BHC%20research%20photograph%20request&amp;body=Specimen%20name%20or%20catalogue%20number%3A%0D%0ARequested%20picture%20or%20viewing%20angle%3A%0D%0A">Email dochwiza@gmail.com</a>
+              </aside>
+              <section class="collection-policy" aria-labelledby="collection-policy-title">
+                <div><p class="eyebrow">Responsible research use</p><h2 id="collection-policy-title">Cite the record. Credit the image. Protect the locality.</h2></div>
+                <p>Every published specimen states its preferred citation and reuse terms. Photograph credit and licence are recorded per image where supplied. Exact locality data may be generalized or withheld to protect vulnerable species, private land and collecting sites.</p>
+              </section>
+              <div id="catalogue-grid" class="catalogue-grid"></div>
+              <div id="catalogue-empty" class="catalogue-empty"><strong>No virtual records yet.</strong><span>Records appear here after review and publication.</span></div>
             </section>
-            <div id="catalogue-grid" class="catalogue-grid"></div>
-            <div id="catalogue-empty" class="catalogue-empty"><strong>No public records yet.</strong><span>Records appear here after review and publication.</span></div>
+            <section class="public-panel visitor-information-panel" id="public-panel-corrections" data-public-panel="corrections" hidden>
+              <div class="visitor-page-heading"><p class="eyebrow">Community review</p><h1>Suggest a correction.</h1><p>Help us improve a specimen record by identifying the exact field and providing a reliable source where possible.</p></div>
+              <form id="correction-form" class="correction-form">
+                <div class="correction-fields">
+                  <label>Catalogue number or record link *<input name="recordReference" required maxlength="200" placeholder="e.g. BHC-000123"></label>
+                  <label>Field to correct<input name="fieldName" maxlength="160" placeholder="e.g. scientific name, date or locality"></label>
+                  <label>Your name<input name="reporterName" maxlength="160" autocomplete="name"></label>
+                  <label>Your email<input name="reporterEmail" type="email" maxlength="240" autocomplete="email" placeholder="For a reply, if you wish"></label>
+                  <label class="span-2">Suggested correction *<textarea name="correction" required maxlength="1200" rows="6" placeholder="State what appears incorrect and what the record should say."></textarea></label>
+                  <label class="span-2">References or source links<textarea name="references" maxlength="600" rows="4" placeholder="Publication, collection label, URL, DOI or other supporting reference"></textarea></label>
+                  <label class="span-2 correction-files">Supporting images or documents<input id="correction-files" name="files" type="file" accept="image/*,.pdf" multiple><small id="correction-file-summary">Choose up to five images or PDF references. Your email app will ask you to attach the selected files before sending.</small></label>
+                </div>
+                <div class="correction-actions"><button type="submit" class="button">Open addressed correction email</button><a href="mailto:dochwiza@gmail.com">Or email dochwiza@gmail.com directly</a></div>
+                <p class="correction-note" id="correction-email-help" aria-live="polite">The form prepares an email to Bio-Heritage Collections. No information is sent until you review and send it in your email app.</p>
+              </form>
+            </section>
+            <section class="public-panel visitor-information-panel" id="public-panel-about" data-public-panel="about" hidden>
+              <div class="visitor-page-heading"><p class="eyebrow">About BHC</p><h1>Digitizing nature, connecting the world.</h1><p>Bio-Heritage Collections creates carefully documented virtual collections that make biological specimens easier to discover, compare and study.</p></div>
+              <div class="about-grid">
+                <article><span>01</span><h2>Document</h2><p>We pair specimen data with consistent research photography, including whole-specimen views and diagnostic anatomical details.</p></article>
+                <article><span>02</span><h2>Preserve</h2><p>Collection records, image provenance and capture methods are retained together so that future researchers can evaluate the evidence.</p></article>
+                <article><span>03</span><h2>Connect</h2><p>Virtual access supports identification, teaching and collaboration while sensitive locality information remains protected.</p></article>
+              </div>
+              <aside class="about-contact"><div><p class="eyebrow">Research contact</p><h2>Questions, collaborations or image requests</h2><p>Contact Bio-Heritage Collections and include a catalogue number whenever your enquiry concerns a particular specimen.</p></div><a class="button" href="mailto:dochwiza@gmail.com">Contact dochwiza@gmail.com</a></aside>
+            </section>
           </section>
         </main>
         <dialog id="specimen-dialog" class="specimen-dialog" aria-labelledby="specimen-dialog-title"><div class="dialog-bar"><span>Published specimen</span><button type="button" id="close-specimen-dialog" aria-label="Close specimen details">Close</button></div><div id="specimen-dialog-content"></div></dialog>
@@ -277,14 +309,19 @@
             </div>
             <div id="image-viewer-stage" class="image-viewer-stage" tabindex="0" aria-label="Zoomable research photograph. Drag to pan when zoomed.">
               <img id="image-viewer-image" alt="" draggable="false">
+              <div id="image-viewer-navigator" class="image-viewer-navigator" role="button" tabindex="0" aria-label="Image area navigator. Select an area to zoom and centre it.">
+                <img id="image-viewer-navigator-image" alt="" aria-hidden="true" draggable="false">
+                <span id="image-viewer-viewport" aria-hidden="true"></span>
+                <small>Area view</small>
+              </div>
               <span class="photo-signature viewer-signature" aria-hidden="true">tate</span>
             </div>
-            <p class="image-viewer-hint">Use the controls, mouse wheel, or + and - keys to zoom. Drag or use the arrow keys to pan.</p>
+            <p class="image-viewer-hint">Select an area in the view square, use the controls or mouse wheel to zoom, then drag the photograph to inspect it.</p>
           </div>
         </dialog>
       </div>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js?v=1.8.1"></script>
+    <script type="module" src="/app.js?v=1.9.0"></script>
   </body>
 </html>
