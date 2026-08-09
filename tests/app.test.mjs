@@ -142,7 +142,9 @@ test("the manager is served from a protected archive path", async () => {
   const worker = await read("worker/index.js");
   const serviceWorker = await read("src/sw.js");
   assert.match(worker, /managerPath === "\/field-archive"/);
-  assert.match(worker, /if \(isFieldArchive\) await requireManager/);
+  assert.match(worker, /if \(isFieldArchive\)/);
+  assert.match(worker, /const signInUrl = new URL\("\/manager", url\)/);
+  assert.match(worker, /Response\.redirect\(signInUrl, 302\)/);
   assert.match(worker, /Response\.redirect\(archiveUrl, 308\)/);
   assert.match(serviceWorker, /url\.pathname === "\/field-archive"/);
 });
