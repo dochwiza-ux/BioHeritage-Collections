@@ -1,13 +1,14 @@
-const CACHE = "bhc-field-shell-v21";
+const CACHE = "bhc-field-shell-v22";
 const ARCHIVE_PATH = "/AkWmn09hT55-_~!xQ7Bv3";
 const SHELL = [
   "/",
   "/index.html",
-  "/app.css?v=2.0.0",
-  "/app.js?v=2.0.0",
-  "/db.js?v=2.0.0",
+  "/app.css?v=2.1.0",
+  "/app.js?v=2.1.0",
+  "/db.js?v=2.1.0",
   "/manifest.webmanifest",
   "/logo.png",
+  "/og.png",
   "/icon-192.png",
   "/icon-512.png",
 ];
