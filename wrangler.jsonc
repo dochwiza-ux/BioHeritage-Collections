@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bioheritage-collections",
   "main": "worker/index.js",
-  "compatibility_date": "2026-08-05",
+  "compatibility_date": "2026-08-08",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./dist/client",
