@@ -353,7 +353,16 @@ const worker = {
         archiveUrl.search = url.search;
         return Response.redirect(archiveUrl, 308);
       }
-      if (isFieldArchive) await requireManager(request, env);
+      if (isFieldArchive) {
+        try {
+          await requireManager(request, env);
+        } catch (error) {
+          if (!(error instanceof Response) || error.status !== 401) throw error;
+          const signInUrl = new URL("/manager", url);
+          signInUrl.search = url.search;
+          return Response.redirect(signInUrl, 302);
+        }
+      }
 
       const assetRequest = isCatalogue || isFieldArchive ? new Request(new URL("/", url), request) : request;
       const asset = await env.ASSETS.fetch(assetRequest);
