@@ -1,10 +1,11 @@
-const CACHE = "bhc-field-shell-v20";
+const CACHE = "bhc-field-shell-v21";
+const ARCHIVE_PATH = "/AkWmn09hT55-_~!xQ7Bv3";
 const SHELL = [
   "/",
   "/index.html",
-  "/app.css?v=1.9.0",
-  "/app.js?v=1.9.0",
-  "/db.js?v=1.9.0",
+  "/app.css?v=2.0.0",
+  "/app.js?v=2.0.0",
+  "/db.js?v=2.0.0",
   "/manifest.webmanifest",
   "/logo.png",
   "/icon-192.png",
@@ -32,7 +33,7 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
   const url = new URL(request.url);
-  if (url.pathname === "/manager" || url.pathname.startsWith("/manager/") || url.pathname === "/field-archive" || url.pathname.startsWith("/field-archive/")) {
+  if (url.pathname === "/manager" || url.pathname.startsWith("/manager/") || url.pathname === "/field-archive" || url.pathname.startsWith("/field-archive/") || url.pathname === ARCHIVE_PATH || url.pathname.startsWith(`${ARCHIVE_PATH}/`)) {
     event.respondWith(fetch(request));
     return;
   }

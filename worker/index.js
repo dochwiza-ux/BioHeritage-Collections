@@ -4,6 +4,7 @@ const JSON_HEADERS = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "same-origin",
 };
+const ARCHIVE_PATH = "/AkWmn09hT55-_~!xQ7Bv3";
 
 function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), { status, headers: { ...JSON_HEADERS, ...extra } });
@@ -346,14 +347,20 @@ const worker = {
       if (url.pathname.startsWith("/api/")) return json({ error: "Not found." }, 404);
       const managerPath = url.pathname.replace(/\/+$/, "");
       const isLegacyManager = managerPath === "/manager" || managerPath.startsWith("/manager/");
-      const isFieldArchive = managerPath === "/field-archive" || managerPath.startsWith("/field-archive/");
+      const isLegacyFieldArchive = managerPath === "/field-archive" || managerPath.startsWith("/field-archive/");
+      const isMaskedArchive = managerPath === ARCHIVE_PATH || managerPath.startsWith(`${ARCHIVE_PATH}/`);
       if (isLegacyManager) {
         await requireManager(request, env);
-        const archiveUrl = new URL("/field-archive", url);
+        const archiveUrl = new URL(ARCHIVE_PATH, url);
         archiveUrl.search = url.search;
         return Response.redirect(archiveUrl, 308);
       }
-      if (isFieldArchive) {
+      if (isLegacyFieldArchive) {
+        const archiveUrl = new URL(ARCHIVE_PATH, url);
+        archiveUrl.search = url.search;
+        return Response.redirect(archiveUrl, 308);
+      }
+      if (isMaskedArchive) {
         try {
           await requireManager(request, env);
         } catch (error) {
@@ -364,7 +371,7 @@ const worker = {
         }
       }
 
-      const assetRequest = isCatalogue || isFieldArchive ? new Request(new URL("/", url), request) : request;
+      const assetRequest = isCatalogue || isMaskedArchive ? new Request(new URL("/", url), request) : request;
       const asset = await env.ASSETS.fetch(assetRequest);
       const contentType = asset.headers.get("content-type") || "";
       if (contentType.includes("text/html")) {
