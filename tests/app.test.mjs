@@ -11,12 +11,12 @@ test("offline app shell includes service worker and manifest", async () => {
   const serviceWorker = await read("src/sw.js");
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /src="\/logo\.png"/);
-  assert.match(html, /app\.css\?v=2\.1\.0/);
-  assert.match(html, /app\.js\?v=2\.1\.0/);
-  assert.match(app, /db\.js\?v=2\.1\.0/);
+  assert.match(html, /app\.css\?v=2\.1\.2/);
+  assert.match(html, /app\.js\?v=2\.1\.2/);
+  assert.match(app, /db\.js\?v=2\.1\.2/);
   assert.match(app, /serviceWorker\.register/);
   assert.match(db, /indexedDB/);
-  assert.match(serviceWorker, /bhc-field-shell-v22/);
+  assert.match(serviceWorker, /bhc-field-shell-v24/);
   assert.match(serviceWorker, /\/og\.png/);
   assert.match(serviceWorker, /cache: "reload"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
@@ -49,7 +49,7 @@ test("publishing supports an audited manager override and a visitor-only catalog
   const devServer = await read("build/dev-server.mjs");
   assert.match(html, /Exceptional publication override/);
   assert.match(html, /href="\/catalogue"/);
-  assert.match(html, /class="catalogue-hero home-hero"/);
+  assert.match(html, /class="catalogue-hero home-hero brand-slide"/);
   assert.match(html, /src="\/og\.png"/);
   assert.match(html, /Explore the Gallery\./);
   assert.match(html, /Bio-Heritage Collections/);
@@ -163,6 +163,18 @@ test("visitor dark mode is persistent and recently added photographs are fitted"
   assert.match(app, /localStorage\.setItem\(VISITOR_THEME_KEY/);
   assert.match(css, /visitor-mode\.theme-dark/);
   assert.match(css, /latest-card-image img \{ object-fit: contain/);
+});
+
+test("the beetle artwork is not covered by the specimen caption banner", async () => {
+  const html = await read("src/index.html");
+  const app = await read("src/app.js");
+  const css = await read("src/app.css");
+  assert.match(html, /home-hero brand-slide/);
+  assert.match(html, /class="home-hero-copy"/);
+  assert.match(app, /classList\.toggle\("brand-slide", Boolean\(feature\.brand\)\)/);
+  assert.match(css, /home-hero\.brand-slide \.home-hero-copy \{ display: none/);
+  assert.match(css, /home-hero\.brand-slide::after \{ display: none/);
+  assert.match(css, /home-hero\.brand-slide \{ aspect-ratio: 1731 \/ 909/);
 });
 
 test("correction buttons create linked public and secure manager references", async () => {

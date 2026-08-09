@@ -1,4 +1,4 @@
-import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=2.1.0";
+import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=2.1.2";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -381,6 +381,7 @@ function showHomeFeature() {
   const button = $("#home-feature-shuffle");
   const feature = homeShowcase.frontViews[homeShowcase.index];
   if (!image || !caption || !button || !feature) return;
+  image.closest(".home-hero")?.classList.toggle("brand-slide", Boolean(feature.brand));
   if (feature.brand) {
     image.src = "/og.png";
     image.alt = "BHC — Digitizing nature, connecting the world. An emerald specimen beetle beside a collection label and locality map.";
