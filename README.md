@@ -1,4 +1,4 @@
-# BHC Field v2.0.0
+# BHC Field v2.1.0
 
 BHC Field is an offline-first biodiversity collection app for Bio-Heritage Collections. It captures
 specimen identity, country-first locations, collection events, preparation
