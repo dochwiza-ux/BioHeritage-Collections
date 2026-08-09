@@ -11,12 +11,12 @@ test("offline app shell includes service worker and manifest", async () => {
   const serviceWorker = await read("src/sw.js");
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /src="\/logo\.png"/);
-  assert.match(html, /app\.css\?v=1\.8\.1/);
-  assert.match(html, /app\.js\?v=1\.8\.1/);
-  assert.match(app, /db\.js\?v=1\.8\.1/);
+  assert.match(html, /app\.css\?v=1\.9\.0/);
+  assert.match(html, /app\.js\?v=1\.9\.0/);
+  assert.match(app, /db\.js\?v=1\.9\.0/);
   assert.match(app, /serviceWorker\.register/);
   assert.match(db, /indexedDB/);
-  assert.match(serviceWorker, /bhc-field-shell-v19/);
+  assert.match(serviceWorker, /bhc-field-shell-v20/);
   assert.match(serviceWorker, /cache: "reload"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
 });
@@ -50,7 +50,7 @@ test("publishing supports an audited manager override and a visitor-only catalog
   assert.match(html, /href="\/catalogue"/);
   assert.match(html, /class="catalogue-hero"/);
   assert.match(html, /src="\/og\.png"/);
-  assert.match(html, /Explore the collection\./);
+  assert.match(html, /Explore the virtual collections\./);
   assert.match(html, /Bio-Heritage Collections/);
   assert.match(html, /Digitizing nature, connecting the world/);
   assert.match(app, /publicationOverride/);
@@ -98,12 +98,53 @@ test("visitor research photographs open in an accessible zoom and pan viewer", a
   assert.match(html, /id="image-viewer-dialog"/);
   assert.match(html, /Image zoom and pan controls/);
   assert.match(html, /id="image-pan-left"/);
+  assert.match(html, /id="image-viewer-navigator"/);
+  assert.match(html, /id="image-viewer-viewport"/);
   assert.match(app, /data-inspect-image/);
   assert.match(app, /zoomImageViewer/);
+  assert.match(app, /focusImageViewerArea/);
+  assert.match(app, /updateImageViewerNavigator/);
   assert.match(app, /pointerdown/);
   assert.match(app, /scale\(\$\{imageViewer\.scale\}\)/);
   assert.match(css, /touch-action: none/);
   assert.match(css, /cursor: grab/);
+  assert.match(css, /image-viewer-navigator/);
+});
+
+test("saved photographs can be removed safely while editing", async () => {
+  const app = await read("src/app.js");
+  const worker = await read("worker/index.js");
+  assert.match(app, /data-remove-stored-media/);
+  assert.match(app, /queueStoredMediaRemoval/);
+  assert.match(app, /syncStatus: "delete-queued"/);
+  assert.match(app, /method: "DELETE"/);
+  assert.match(worker, /async function deleteMedia/);
+  assert.match(worker, /DELETE FROM media WHERE id = \? AND owner_id = \?/);
+  assert.match(worker, /await env\.MEDIA\.delete/);
+});
+
+test("visitor navigation includes Virtual Collections, corrections and About us", async () => {
+  const html = await read("src/index.html");
+  const app = await read("src/app.js");
+  assert.match(html, /VIRTUAL COLLECTIONS/);
+  assert.doesNotMatch(html, /PUBLIC COLLECTION/);
+  assert.match(html, /data-public-panel-button="corrections"/);
+  assert.match(html, /id="correction-form"/);
+  assert.match(html, /id="correction-files"/);
+  assert.match(html, /mailto:dochwiza@gmail\.com/);
+  assert.match(html, /data-public-panel-button="about"/);
+  assert.match(app, /prepareCorrectionEmail/);
+  assert.match(app, /BHC Virtual Collections correction suggestion/);
+  assert.match(app, /document\.title = "BHC Virtual Collections"/);
+});
+
+test("the manager is served from a protected archive path", async () => {
+  const worker = await read("worker/index.js");
+  const serviceWorker = await read("src/sw.js");
+  assert.match(worker, /managerPath === "\/field-archive"/);
+  assert.match(worker, /if \(isFieldArchive\) await requireManager/);
+  assert.match(worker, /Response\.redirect\(archiveUrl, 308\)/);
+  assert.match(serviceWorker, /url\.pathname === "\/field-archive"/);
 });
 
 test("visitor catalogue offers research requests and signs public photographs", async () => {
