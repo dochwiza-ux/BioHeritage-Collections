@@ -1,8 +1,9 @@
-import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=2.0.0";
+import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=2.1.0";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const FORM_DRAFT_KEY = "bhcm-field-form-draft";
+const VISITOR_THEME_KEY = "bhc-visitor-theme";
 const COUNTRY_SEEDS = ["United States", "Zimbabwe", "South Africa", "Botswana", "Mozambique", "Zambia", "Malawi", "Kenya", "Tanzania", "Canada", "United Kingdom"];
 const PHOTO_PROTOCOL = [
   { id: "habitus-dorsal", label: "Top view — dorsal habitus", core: true, guidance: "Whole specimen; record body outline, head, thorax, abdomen and appendage position." },
@@ -42,6 +43,8 @@ const state = {
   cloudReady: false,
   cloudDatabaseReady: false,
   cloudImagesReady: false,
+  publicDeepLinkHandled: false,
+  managerDeepLinkHandled: false,
   localPreview: ["127.0.0.1", "localhost"].includes(window.location.hostname),
   visitorMode: window.location.pathname.replace(/\/+$/, "") === "/catalogue"
     || (window.location.hostname === "bioheritage-collections.dochwiza.workers.dev"
@@ -369,7 +372,23 @@ function showNextHomeFrontView() {
     return;
   }
   homeShowcase.index = randomIndex(homeShowcase.frontViews.length, homeShowcase.index);
-  const { item, record } = homeShowcase.frontViews[homeShowcase.index];
+  showHomeFeature();
+}
+
+function showHomeFeature() {
+  const image = $("#home-feature-image");
+  const caption = $("#home-feature-caption");
+  const button = $("#home-feature-shuffle");
+  const feature = homeShowcase.frontViews[homeShowcase.index];
+  if (!image || !caption || !button || !feature) return;
+  if (feature.brand) {
+    image.src = "/og.png";
+    image.alt = "BHC — Digitizing nature, connecting the world. An emerald specimen beetle beside a collection label and locality map.";
+    caption.textContent = "BHC collection artwork · Digitizing nature, connecting the world.";
+    button.disabled = homeShowcase.frontViews.length < 2;
+    return;
+  }
+  const { item, record } = feature;
   const source = catalogueMediaSource(item);
   const label = item.photoLabel || protocolSlot(item.photoType)?.label || "Front view";
   image.src = source;
@@ -380,13 +399,15 @@ function showNextHomeFrontView() {
 
 function renderHomeShowcase(records, media) {
   const recordsById = new Map(records.map((record) => [record.id, record]));
-  homeShowcase.frontViews = media
+  const publishedFrontViews = media
     .filter((item) => item.photoType === "head-frontal" && recordsById.has(item.recordId) && isDisplayableMime(item.mimeType || item.blob?.type) && catalogueMediaSource(item))
     .map((item) => ({ item, record: recordsById.get(item.recordId) }));
-  homeShowcase.index = -1;
-  showNextHomeFrontView();
+  homeShowcase.frontViews = [{ brand: true }, ...publishedFrontViews];
+  homeShowcase.index = 0;
+  showHomeFeature();
   clearInterval(homeShowcase.timer);
-  homeShowcase.timer = homeShowcase.frontViews.length > 1 ? setInterval(showNextHomeFrontView, 9000) : null;
+  const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  homeShowcase.timer = homeShowcase.frontViews.length > 1 && !reducedMotion ? setInterval(showNextHomeFrontView, 8000) : null;
 }
 
 function renderLatestAdditions(records, media) {
@@ -406,7 +427,41 @@ function renderLatestAdditions(records, media) {
       <span class="latest-card-copy"><small>${escapeHtml(record.catalogNumber || "New record")}</small><strong><i>${escapeHtml(scientificNameFor(record))}</i></strong><span>${escapeHtml(publicLocationFor(record))}</span></span>
     </button>`;
   }).join("");
-  $$('[data-open-specimen]', host).forEach((button) => button.addEventListener("click", () => openSpecimen(button.dataset.openSpecimen)));
+  bindSpecimenActions(host);
+}
+
+function bindSpecimenActions(root) {
+  $$('[data-open-specimen]', root).forEach((button) => button.addEventListener("click", () => openSpecimen(button.dataset.openSpecimen)));
+  $$('[data-suggest-correction]', root).forEach((button) => button.addEventListener("click", () => openCorrectionForRecord(button.dataset.suggestCorrection)));
+}
+
+function openCorrectionForRecord(id) {
+  const record = state.catalogueRecords.find((item) => item.id === id);
+  const form = $("#correction-form");
+  if (!record || !form) return;
+  const citedUrl = publicRecordUrl(record);
+  const managerUrl = managerRecordUrl(record);
+  form.elements.namedItem("recordReference").value = record.catalogNumber || record.id;
+  form.elements.namedItem("recordId").value = record.id;
+  form.elements.namedItem("recordUrl").value = citedUrl;
+  form.elements.namedItem("managerUrl").value = managerUrl;
+  $("#correction-context-title").textContent = `${record.catalogNumber || "Published specimen"} · ${scientificNameFor(record)}`;
+  $("#correction-context-link").href = citedUrl;
+  $("#correction-context").hidden = false;
+  if ($("#specimen-dialog")?.open) $("#specimen-dialog").close();
+  setPublicPanel("corrections");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  requestAnimationFrame(() => form.elements.namedItem("fieldName").focus());
+}
+
+function openPublicRecordFromQuery() {
+  if (!state.visitorMode || state.publicDeepLinkHandled) return;
+  const reference = clean(new URLSearchParams(window.location.search).get("record"));
+  if (!reference) return;
+  const record = state.catalogueRecords.find((item) => item.id === reference || item.catalogNumber === reference);
+  if (!record) return;
+  state.publicDeepLinkHandled = true;
+  openSpecimen(record.id);
 }
 
 function closeImageViewer() {
@@ -691,6 +746,43 @@ function citationFor(record) {
   return `${repository} (${year}). ${record.catalogNumber || "Uncatalogued specimen"}: ${scientificNameFor(record)}. BHC Virtual Collections.`;
 }
 
+function publicRecordUrl(record) {
+  const url = new URL("/catalogue", window.location.origin);
+  url.searchParams.set("record", record.catalogNumber || record.id);
+  return url.href;
+}
+
+function managerRecordUrl(record) {
+  const url = new URL("/manager", window.location.origin);
+  url.searchParams.set("record", record.id);
+  if (record.catalogNumber) url.searchParams.set("catalog", record.catalogNumber);
+  return url.href;
+}
+
+function visitorThemePreference() {
+  try {
+    const stored = localStorage.getItem(VISITOR_THEME_KEY);
+    if (["light", "dark"].includes(stored)) return stored;
+  } catch { /* use the system preference when storage is unavailable */ }
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyVisitorTheme(theme, { persist = false } = {}) {
+  const dark = theme === "dark";
+  document.body.classList.toggle("theme-dark", dark);
+  document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  const button = $("#visitor-theme-toggle");
+  if (button) {
+    button.setAttribute("aria-pressed", String(dark));
+    button.textContent = dark ? "Light mode" : "Dark mode";
+  }
+  const themeColor = $('meta[name="theme-color"]');
+  if (themeColor) themeColor.content = dark ? "#07120f" : "#173f35";
+  if (persist) {
+    try { localStorage.setItem(VISITOR_THEME_KEY, dark ? "dark" : "light"); } catch { /* theme still applies for this page */ }
+  }
+}
+
 function publicCaptureMetadata(item, record) {
   return {
     ...(item.captureMetadata || {}),
@@ -708,6 +800,19 @@ async function refreshState() {
   state.records = await getRecords();
   state.media = await getMedia();
   renderAll();
+  await openManagerRecordFromQuery();
+}
+
+async function openManagerRecordFromQuery() {
+  if (state.visitorMode || state.managerDeepLinkHandled) return;
+  const parameters = new URLSearchParams(window.location.search);
+  const reference = clean(parameters.get("record") || parameters.get("catalog"));
+  if (!reference) return;
+  const record = state.records.find((item) => item.id === reference || item.catalogNumber === reference);
+  if (!record) return;
+  state.managerDeepLinkHandled = true;
+  await editRecord(record.id);
+  toast(`Opened ${record.catalogNumber || "the cited record"} from the correction link.`);
 }
 
 function renderAll() {
@@ -909,12 +1014,13 @@ async function renderCatalogue() {
     const source = catalogueMediaSource(image);
     return `<article class="specimen-card">
       <button type="button" class="specimen-image specimen-image-button" data-open-specimen="${escapeAttribute(record.id)}" aria-label="Open ${escapeAttribute(record.catalogNumber || titleFor(record))}">${source ? `<img src="${escapeAttribute(source)}" alt="${escapeAttribute(`${titleFor(record)} — ${image.photoLabel || "specimen photograph"}`)}"><span class="photo-signature" aria-hidden="true">tate</span>` : `<span class="monogram">${escapeHtml(initials(record))}</span>`}<span class="specimen-image-action">Open record</span></button>
-      <div class="specimen-card-body"><span class="catalog-id">${escapeHtml(record.catalogNumber)}</span><h2><i>${escapeHtml(scientificNameFor(record))}</i></h2><p class="common">${escapeHtml(record.commonName || record.identificationStatus)}</p><div class="specimen-meta"><span>Collected<strong>${escapeHtml(record.eventDateStart || "Not recorded")}</strong></span><span>Public locality<strong>${escapeHtml(publicLocationFor(record))}</strong></span></div><div class="specimen-card-actions"><span>${allRecordMedia.length} photograph${allRecordMedia.length === 1 ? "" : "s"}</span><button class="button secondary compact" data-open-specimen="${record.id}">View record</button></div></div>
+      <div class="specimen-card-body"><span class="catalog-id">${escapeHtml(record.catalogNumber)}</span><h2><i>${escapeHtml(scientificNameFor(record))}</i></h2><p class="common">${escapeHtml(record.commonName || record.identificationStatus)}</p><div class="specimen-meta"><span>Collected<strong>${escapeHtml(record.eventDateStart || "Not recorded")}</strong></span><span>Public locality<strong>${escapeHtml(publicLocationFor(record))}</strong></span></div><div class="specimen-card-actions"><span>${allRecordMedia.length} photograph${allRecordMedia.length === 1 ? "" : "s"}</span><div class="specimen-card-buttons"><button class="button secondary compact" data-open-specimen="${escapeAttribute(record.id)}">View record</button><button class="button secondary compact correction-entry-button" data-suggest-correction="${escapeAttribute(record.id)}">Suggest a correction</button></div></div></div>
     </article>`;
   }).join("");
-  $$('[data-open-specimen]', host).forEach((button) => button.addEventListener("click", () => openSpecimen(button.dataset.openSpecimen)));
+  bindSpecimenActions(host);
   renderLatestAdditions(allPublished, media);
   renderHomeShowcase(allPublished, media);
+  openPublicRecordFromQuery();
 }
 
 function openSpecimen(id) {
@@ -942,11 +1048,12 @@ function openSpecimen(id) {
       <section class="record-detail-panel"><p class="eyebrow">Identification and provenance</p><h3>Research record</h3><dl class="record-detail-list"><div><dt>Identification status</dt><dd>${escapeHtml(record.identificationStatus || "Not recorded")}</dd></div><div><dt>Identified</dt><dd>${escapeHtml(identification)}</dd></div><div><dt>Order / family</dt><dd>${escapeHtml([record.order, record.family].filter(Boolean).join(" / ") || "Not recorded")}</dd></div><div><dt>Preservation</dt><dd>${escapeHtml(record.preservation || "Not recorded")}</dd></div><div><dt>Sex</dt><dd>${escapeHtml(record.sex || "Not recorded")}</dd></div><div><dt>Last updated</dt><dd>${escapeHtml(record.updatedAt ? new Date(record.updatedAt).toLocaleDateString() : "Not recorded")}</dd></div></dl>${record.identificationRemarks ? `<p class="record-remarks">${escapeHtml(record.identificationRemarks)}</p>` : ""}</section>
       <section class="record-detail-panel rights-panel"><p class="eyebrow">Citation and reuse</p><h3>Use this record responsibly</h3><blockquote>${escapeHtml(citationFor(record))}</blockquote><dl class="record-detail-list"><div><dt>Rights holder</dt><dd>${escapeHtml(record.rightsHolder || "Bio-Heritage Collections")}</dd></div><div><dt>Record-data licence</dt><dd>${escapeHtml(record.recordLicense || "All rights reserved")}</dd></div><div><dt>Default image credit</dt><dd>${escapeHtml(record.imageCredit || "Tate / Bio-Heritage Collections")}</dd></div><div><dt>Default image licence</dt><dd>${escapeHtml(record.imageLicense || "All rights reserved")}</dd></div></dl><p class="privacy-note">${escapeHtml(localityDisclosureFor(record))}</p></section>
     </div>
-    <aside class="specimen-photo-request"><div><strong>Would another picture or angle help your research?</strong><span>Send the catalogue number and requested view directly to Tate.</span></div><a class="button secondary compact" href="${escapeAttribute(requestHref)}">Request this specimen</a></aside>${gallery ? `<div class="research-gallery">${gallery}</div>` : `<div class="research-empty">No public research photographs are attached to this record.</div>`}</article>`;
+    <aside class="specimen-photo-request"><div><strong>Would another picture, angle or data correction help your research?</strong><span>Contact Tate about this exact published specimen.</span></div><div class="specimen-request-actions"><a class="button secondary compact" href="${escapeAttribute(requestHref)}">Request a photograph</a><button type="button" class="button secondary compact correction-entry-button" data-suggest-correction="${escapeAttribute(record.id)}">Suggest a correction</button></div></aside>${gallery ? `<div class="research-gallery">${gallery}</div>` : `<div class="research-empty">No public research photographs are attached to this record.</div>`}</article>`;
   $$("[data-inspect-image]", $("#specimen-dialog-content")).forEach((button) => button.addEventListener("click", () => {
     const item = state.catalogueMedia.find((mediaItem) => mediaItem.id === button.dataset.inspectImage);
     if (item) openImageViewer(item, record);
   }));
+  bindSpecimenActions($("#specimen-dialog-content"));
   $("#specimen-dialog").showModal();
 }
 
@@ -1359,6 +1466,9 @@ function prepareCorrectionEmail(event) {
     "BHC Virtual Collections correction suggestion",
     "",
     `Record or catalogue number: ${recordReference}`,
+    clean(data.recordId) ? `Collection record ID: ${clean(data.recordId)}` : "",
+    clean(data.recordUrl) ? `Cited public record: ${clean(data.recordUrl)}` : "",
+    clean(data.managerUrl) ? `Secure manager record: ${clean(data.managerUrl)}` : "",
     `Field to correct: ${clean(data.fieldName) || "Not specified"}`,
     `Suggested correction: ${clean(data.correction)}`,
     `References: ${clean(data.references) || "None supplied"}`,
@@ -1381,6 +1491,7 @@ function bindPublicNavigation() {
   $$('[data-public-panel-button]', tabs).forEach((button) => button.addEventListener("click", () => setPublicPanel(button.dataset.publicPanelButton)));
   $$('[data-open-gallery]').forEach((button) => button.addEventListener("click", () => setPublicPanel("gallery")));
   $("#home-feature-shuffle")?.addEventListener("click", showNextHomeFrontView);
+  $("#visitor-theme-toggle")?.addEventListener("click", () => applyVisitorTheme(document.body.classList.contains("theme-dark") ? "light" : "dark", { persist: true }));
   $("#correction-form").addEventListener("submit", prepareCorrectionEmail);
   $("#correction-files").addEventListener("change", correctionFileSummary);
 }
@@ -1436,6 +1547,7 @@ function bindEvents() {
 
 async function initializeVisitor() {
   document.body.classList.add("visitor-mode");
+  applyVisitorTheme(visitorThemePreference());
   document.title = "BHC Virtual Collections";
   $("#catalogue-search").addEventListener("input", renderCatalogue);
   $("#close-specimen-dialog").addEventListener("click", () => $("#specimen-dialog").close());

@@ -11,12 +11,13 @@ test("offline app shell includes service worker and manifest", async () => {
   const serviceWorker = await read("src/sw.js");
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /src="\/logo\.png"/);
-  assert.match(html, /app\.css\?v=2\.0\.0/);
-  assert.match(html, /app\.js\?v=2\.0\.0/);
-  assert.match(app, /db\.js\?v=2\.0\.0/);
+  assert.match(html, /app\.css\?v=2\.1\.0/);
+  assert.match(html, /app\.js\?v=2\.1\.0/);
+  assert.match(app, /db\.js\?v=2\.1\.0/);
   assert.match(app, /serviceWorker\.register/);
   assert.match(db, /indexedDB/);
-  assert.match(serviceWorker, /bhc-field-shell-v21/);
+  assert.match(serviceWorker, /bhc-field-shell-v22/);
+  assert.match(serviceWorker, /\/og\.png/);
   assert.match(serviceWorker, /cache: "reload"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
 });
@@ -146,8 +147,37 @@ test("visitor navigation follows Home, About Us, Gallery and correction order", 
   assert.match(app, /BHC Virtual Collections correction suggestion/);
   assert.match(app, /document\.title = "BHC Virtual Collections"/);
   assert.match(app, /photoType === "head-frontal"/);
+  assert.match(app, /\{ brand: true \}/);
+  assert.match(app, /setInterval\(showNextHomeFrontView, 8000\)/);
   assert.match(app, /renderLatestAdditions/);
   assert.match(app, /data-open-specimen/);
+});
+
+test("visitor dark mode is persistent and recently added photographs are fitted", async () => {
+  const html = await read("src/index.html");
+  const app = await read("src/app.js");
+  const css = await read("src/app.css");
+  assert.match(html, /id="visitor-theme-toggle"/);
+  assert.match(app, /VISITOR_THEME_KEY/);
+  assert.match(app, /prefers-color-scheme: dark/);
+  assert.match(app, /localStorage\.setItem\(VISITOR_THEME_KEY/);
+  assert.match(css, /visitor-mode\.theme-dark/);
+  assert.match(css, /latest-card-image img \{ object-fit: contain/);
+});
+
+test("correction buttons create linked public and secure manager references", async () => {
+  const html = await read("src/index.html");
+  const app = await read("src/app.js");
+  assert.match(html, /id="correction-context"/);
+  assert.match(html, /name="managerUrl"/);
+  assert.match(app, /data-suggest-correction/);
+  assert.match(app, /function publicRecordUrl\(record\)/);
+  assert.match(app, /function managerRecordUrl\(record\)/);
+  assert.match(app, /Cited public record:/);
+  assert.match(app, /Secure manager record:/);
+  assert.match(app, /openPublicRecordFromQuery/);
+  assert.match(app, /openManagerRecordFromQuery/);
+  assert.match(app, /await editRecord\(record\.id\)/);
 });
 
 test("the manager is served from a protected archive path", async () => {
@@ -171,7 +201,7 @@ test("visitor catalogue offers research requests and signs public photographs", 
   assert.match(html, /mailto:dochwiza@gmail\.com/);
   assert.match(html, /class="photo-signature viewer-signature"/);
   assert.match(app, /BHC photograph request/);
-  assert.match(app, /Request this specimen/);
+  assert.match(app, /Request a photograph/);
   assert.match(app, /class="photo-signature"/);
   assert.match(css, /"Segoe Script"/);
   assert.match(css, /\.photo-signature/);

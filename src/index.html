@@ -16,7 +16,7 @@
     <title>BHC Field</title>
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/logo.png" type="image/png">
-    <link rel="stylesheet" href="/app.css?v=2.0.0">
+    <link rel="stylesheet" href="/app.css?v=2.1.0">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -38,7 +38,7 @@
             <span class="status-dot" id="sidebar-dot"></span>
             <div><strong id="sidebar-status">Checking connection</strong><small id="sidebar-detail">Your work stays on this device</small></div>
           </div>
-          <p>Bio-Heritage Collections v2.0.0<br>Secure Cloud archive edition</p>
+          <p>Bio-Heritage Collections v2.1.0<br>Secure Cloud archive edition</p>
         </div>
       </aside>
 
@@ -241,7 +241,10 @@
           </section>
 
           <section class="view" id="view-catalogue" data-title="Catalogue">
-            <div class="visitor-brand"><img class="visitor-logo" src="/logo.png" alt="BHC logo"><div><strong>Bio-Heritage Collections</strong><small>VIRTUAL COLLECTIONS</small></div></div>
+            <div class="visitor-header">
+              <div class="visitor-brand"><img class="visitor-logo" src="/logo.png" alt="BHC logo"><div><strong>Bio-Heritage Collections</strong><small>VIRTUAL COLLECTIONS</small></div></div>
+              <button type="button" class="visitor-theme-toggle" id="visitor-theme-toggle" aria-pressed="false">Dark mode</button>
+            </div>
             <nav class="visitor-tabs" aria-label="Virtual Collections pages">
               <button type="button" class="visitor-tab active" data-public-panel-button="home" aria-controls="public-panel-home" aria-selected="true">Home</button>
               <button type="button" class="visitor-tab" data-public-panel-button="about" aria-controls="public-panel-about" aria-selected="false">About Us</button>
@@ -251,7 +254,7 @@
             <section class="public-panel active" id="public-panel-home" data-public-panel="home">
               <figure class="catalogue-hero home-hero">
                 <img id="home-feature-image" src="/og.png" width="1731" height="909" alt="BHC — Digitizing nature, connecting the world. An emerald specimen beetle beside a collection label and locality map.">
-                <figcaption><div><p class="eyebrow">Bio-Heritage Collections</p><h1>Digitizing nature, connecting the world.</h1><p id="home-feature-caption">Discover research photographs and carefully documented specimen records.</p></div><button type="button" id="home-feature-shuffle" class="hero-shuffle">Show another front view</button></figcaption>
+                <figcaption><div><p class="eyebrow">Bio-Heritage Collections</p><h1>Digitizing nature, connecting the world.</h1><p id="home-feature-caption">Discover research photographs and carefully documented specimen records.</p></div><button type="button" id="home-feature-shuffle" class="hero-shuffle">Show another image</button></figcaption>
               </figure>
               <div class="home-introduction"><div><p class="eyebrow">Virtual Collections</p><h2>Explore biological specimens in remarkable detail.</h2></div><p>Our digital archive brings collection data, whole-specimen views and diagnostic research photographs together for discovery, comparison and future study.</p></div>
               <section class="latest-section" aria-labelledby="latest-additions-title">
@@ -286,6 +289,13 @@
             <section class="public-panel visitor-information-panel" id="public-panel-corrections" data-public-panel="corrections" hidden>
               <div class="visitor-page-heading"><p class="eyebrow">Community review</p><h1>Suggest a correction.</h1><p>Help us improve a specimen record by identifying the exact field and providing a reliable source where possible.</p></div>
               <form id="correction-form" class="correction-form">
+                <aside class="correction-context" id="correction-context" hidden>
+                  <div><span>Correction linked to</span><strong id="correction-context-title">Published specimen</strong></div>
+                  <a id="correction-context-link" href="/catalogue">Open cited record</a>
+                </aside>
+                <input type="hidden" name="recordId">
+                <input type="hidden" name="recordUrl">
+                <input type="hidden" name="managerUrl">
                 <div class="correction-fields">
                   <label>Catalogue number or record link *<input name="recordReference" required maxlength="200" placeholder="e.g. BHC-000123"></label>
                   <label>Field to correct<input name="fieldName" maxlength="160" placeholder="e.g. scientific name, date or locality"></label>
@@ -339,6 +349,6 @@
       </div>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js?v=2.0.0"></script>
+    <script type="module" src="/app.js?v=2.1.0"></script>
   </body>
 </html>
