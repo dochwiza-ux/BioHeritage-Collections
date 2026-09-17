@@ -1,4 +1,4 @@
-const CACHE = "bhc-field-shell-v25";
+const CACHE = "bhc-field-shell-v26";
 const ARCHIVE_PATH = "/AkWmn09hT55-_~!xQ7Bv3";
 const SHELL = [
   "/",

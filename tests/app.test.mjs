@@ -16,7 +16,7 @@ test("offline app shell includes service worker and manifest", async () => {
   assert.match(app, /db\.js\?v=2\.1\.2/);
   assert.match(app, /serviceWorker\.register/);
   assert.match(db, /indexedDB/);
-  assert.match(serviceWorker, /bhc-field-shell-v24/);
+  assert.match(serviceWorker, /bhc-field-shell-v26/);
   assert.match(serviceWorker, /\/og\.png/);
   assert.match(serviceWorker, /cache: "reload"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
