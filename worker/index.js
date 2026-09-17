@@ -1,10 +1,25 @@
+const SECURITY_HEADERS = {
+  "strict-transport-security": "max-age=31536000; includeSubDomains",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "same-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=()",
+  "cross-origin-opener-policy": "same-origin",
+  "cross-origin-resource-policy": "same-origin",
+  "x-permitted-cross-domain-policies": "none",
+};
+
 const JSON_HEADERS = {
+  ...SECURITY_HEADERS,
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
-  "x-content-type-options": "nosniff",
-  "referrer-policy": "same-origin",
 };
 const ARCHIVE_PATH = "/AkWmn09hT55-_~!xQ7Bv3";
+
+function applySecurityHeaders(headers) {
+  for (const [name, value] of Object.entries(SECURITY_HEADERS)) headers.set(name, value);
+  return headers;
+}
 
 function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), { status, headers: { ...JSON_HEADERS, ...extra } });
@@ -299,7 +314,7 @@ async function serveMedia(request, env, id) {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("etag", object.httpEtag);
-  headers.set("x-content-type-options", "nosniff");
+  applySecurityHeaders(headers);
   headers.set("content-security-policy", "default-src 'none'; sandbox");
   headers.set("cache-control", row.publication_status === "published" ? "public, max-age=86400" : "private, no-store");
   if (!String(row.mime_type || "").startsWith("image/") || row.mime_type === "image/svg+xml") headers.set("content-disposition", `attachment; filename="${safeFileName(row.file_name)}"`);
@@ -308,9 +323,7 @@ async function serveMedia(request, env, id) {
 
 function secureAsset(response) {
   const headers = new Headers(response.headers);
-  headers.set("x-content-type-options", "nosniff");
-  headers.set("referrer-policy", "same-origin");
-  headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  applySecurityHeaders(headers);
   if ((headers.get("content-type") || "").includes("text/html")) {
     headers.set("content-security-policy", "default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'");
   }
