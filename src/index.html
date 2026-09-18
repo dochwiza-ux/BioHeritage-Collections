@@ -16,7 +16,7 @@
     <title>BHC Field</title>
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/logo.png" type="image/png">
-    <link rel="stylesheet" href="/app.css?v=2.1.2">
+    <link rel="stylesheet" href="/app.css?v=2.1.3">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -38,7 +38,7 @@
             <span class="status-dot" id="sidebar-dot"></span>
             <div><strong id="sidebar-status">Checking connection</strong><small id="sidebar-detail">Your work stays on this device</small></div>
           </div>
-          <p>Bio-Heritage Collections v2.1.2<br>Secure Cloud archive edition</p>
+          <p>Bio-Heritage Collections v2.1.3<br>Secure Cloud archive edition</p>
         </div>
       </aside>
 
@@ -223,7 +223,7 @@
 
           <section class="view" id="view-records" data-title="Records">
             <div class="page-heading"><div><p class="eyebrow">Device archive</p><h1>Collection records</h1><p>Search, review and prepare records whether you are connected or not.</p></div><button class="button primary" data-go="capture">New record</button></div>
-            <div class="toolbar"><label class="search-box"><span>Search</span><input id="record-search" type="search" placeholder="Catalog number, name or locality"></label><label>Status<select id="record-filter"><option value="all">All records</option><option value="queued">Awaiting sync</option><option value="draft">Draft</option><option value="ready">Ready</option><option value="published">Published</option></select></label></div>
+            <div class="toolbar"><label class="search-box"><span>Search</span><input id="record-search" type="search" placeholder="Catalog number, name or locality"></label><label>Status<select id="record-filter"><option value="all">All records</option><option value="queued">Awaiting sync</option><option value="conflict">Needs conflict review</option><option value="draft">Draft</option><option value="ready">Ready</option><option value="published">Published</option></select></label></div>
             <div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="select-all" aria-label="Select all records"></th><th>Record</th><th>Location</th><th>Event date</th><th>Photos</th><th>Publication</th><th>Sync</th><th></th></tr></thead><tbody id="records-body"></tbody></table><div id="records-empty" class="empty-table" hidden>No records match this view.</div></div>
           </section>
 
@@ -349,6 +349,6 @@
       </div>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js?v=2.1.2"></script>
+    <script type="module" src="/app.js?v=2.1.3"></script>
   </body>
 </html>

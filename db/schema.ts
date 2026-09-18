@@ -27,4 +27,30 @@ export type BhcMediaRow = {
   orientation: string | null;
   captureJson: string;
   createdAt: string;
+  updatedAt: string;
 };
+
+export type BhcRecordTombstoneRow = {
+  id: string;
+  ownerId: string;
+  deletedAt: string;
+};
+
+export type BhcCatalogNumberRow = {
+  sequence: number;
+  recordId: string;
+  ownerId: string;
+  createdAt: string;
+};
+
+export type BhcPendingMediaDeletionRow = {
+  r2Key: string;
+  mediaId: string;
+  recordId: string;
+  ownerId: string;
+  requestedAt: string;
+  attempts: number;
+  lastError: string | null;
+};
+
+export type BhcPendingMediaUploadRow = BhcPendingMediaDeletionRow;

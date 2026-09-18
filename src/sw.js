@@ -1,11 +1,11 @@
-const CACHE = "bhc-field-shell-v26";
+const CACHE = "bhc-field-shell-v27";
 const ARCHIVE_PATH = "/AkWmn09hT55-_~!xQ7Bv3";
 const SHELL = [
   "/",
   "/index.html",
-  "/app.css?v=2.1.2",
-  "/app.js?v=2.1.2",
-  "/db.js?v=2.1.2",
+  "/app.css?v=2.1.3",
+  "/app.js?v=2.1.3",
+  "/db.js?v=2.1.3",
   "/manifest.webmanifest",
   "/logo.png",
   "/og.png",

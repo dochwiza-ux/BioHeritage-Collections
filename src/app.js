@@ -1,4 +1,4 @@
-import { getMedia, getRecord, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, removeMedia, removeRecord, reserveCatalogNumber } from "./db.js?v=2.1.2";
+import { getMedia, getRecord, getRecordDeletions, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, putRecordDeletion, removeMedia, removeRecord, removeRecordDeletion, reserveCatalogNumber } from "./db.js?v=2.1.3";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -817,7 +817,7 @@ async function openManagerRecordFromQuery() {
 }
 
 function renderAll() {
-  const queuedRecords = state.records.filter((record) => record.syncStatus === "queued").length;
+  const queuedRecords = state.records.filter((record) => ["queued", "conflict"].includes(record.syncStatus)).length;
   const queuedMedia = state.media.filter((item) => ["queued", "delete-queued"].includes(item.syncStatus)).length;
   const queued = queuedRecords + queuedMedia;
   const ready = state.records.filter((record) => record.publicationStatus === "ready").length;
@@ -879,7 +879,7 @@ async function checkCloudAvailability() {
 function updateConnectionUI() {
   const online = navigator.onLine;
   const cloudReady = online && state.cloudReady;
-  const queued = state.records.filter((record) => record.syncStatus === "queued").length + state.media.filter((item) => item.syncStatus === "queued").length;
+  const queued = state.records.filter((record) => ["queued", "conflict"].includes(record.syncStatus)).length + state.media.filter((item) => ["queued", "delete-queued"].includes(item.syncStatus)).length;
   const label = state.localPreview
     ? "Local preview · cloud not connected"
     : (!online ? "Offline · device archive active" : (cloudReady ? "Online · cloud connected" : "Online · device-only mode"));
@@ -910,6 +910,7 @@ function recordMatches(record, query, filter) {
   if (query && !text.includes(query)) return false;
   if (filter === "all") return true;
   if (filter === "queued") return record.syncStatus === "queued";
+  if (filter === "conflict") return record.syncStatus === "conflict";
   return record.publicationStatus === filter;
 }
 
@@ -922,15 +923,20 @@ function renderRecords() {
   $("#records-empty").hidden = records.length > 0;
   body.innerHTML = records.map((record) => {
     const photoReview = photoReviewFor(record);
+    const publicationClass = ["draft", "ready", "published", "withheld"].includes(record.publicationStatus) ? record.publicationStatus : "draft";
+    const syncClass = ["queued", "synced", "conflict"].includes(record.syncStatus) ? record.syncStatus : "queued";
+    const conflictActions = record.syncStatus === "conflict"
+      ? `<span class="conflict-actions"><button type="button" data-resolve-conflict="cloud" data-record-id="${escapeAttribute(record.id)}">${record.syncConflict?.reason === "deleted" ? "Accept deletion" : "Use cloud"}</button><button type="button" data-resolve-conflict="device" data-record-id="${escapeAttribute(record.id)}">${record.syncConflict?.reason === "deleted" ? "Restore as new" : "Keep device"}</button></span>`
+      : "";
     return `<tr>
-      <td><input type="checkbox" data-select-record="${record.id}" aria-label="Select ${escapeHtml(record.catalogNumber)}" ${state.selected.has(record.id) ? "checked" : ""}></td>
+      <td><input type="checkbox" data-select-record="${escapeAttribute(record.id)}" aria-label="Select ${escapeAttribute(record.catalogNumber)}" ${state.selected.has(record.id) ? "checked" : ""}></td>
       <td><strong>${escapeHtml(record.catalogNumber)}</strong><small><i>${escapeHtml(titleFor(record))}</i>${record.commonName && record.scientificName ? ` · ${escapeHtml(record.commonName)}` : ""}</small></td>
       <td>${escapeHtml(locationFor(record))}</td>
       <td>${escapeHtml(record.eventDateStart || "Not recorded")}</td>
       <td><span class="badge photo-count ${photoReview.ready ? "" : "incomplete"}">${photoReview.documented}/${PHOTO_PROTOCOL.length}</span><small>${photoReview.ready ? "Research set documented" : "Needs review"}</small></td>
-      <td><span class="badge ${record.publicationStatus}">${escapeHtml(record.publicationStatus)}</span></td>
-      <td><span class="badge ${record.syncStatus}">${escapeHtml(record.syncStatus)}</span></td>
-      <td><button class="table-action" data-edit-record="${record.id}">Edit</button> · <button class="table-action" data-delete-record="${record.id}">Delete</button></td>
+      <td><span class="badge ${publicationClass}">${escapeHtml(record.publicationStatus)}</span></td>
+      <td><span class="badge ${syncClass}">${escapeHtml(record.syncStatus)}</span>${conflictActions}</td>
+      <td><button class="table-action" data-edit-record="${escapeAttribute(record.id)}">Edit</button> · <button class="table-action" data-delete-record="${escapeAttribute(record.id)}">Delete</button></td>
     </tr>`;
   }).join("");
   $$('[data-select-record]', body).forEach((checkbox) => checkbox.addEventListener("change", () => {
@@ -939,6 +945,7 @@ function renderRecords() {
   }));
   $$('[data-edit-record]', body).forEach((button) => button.addEventListener("click", () => editRecord(button.dataset.editRecord)));
   $$('[data-delete-record]', body).forEach((button) => button.addEventListener("click", () => deleteRecord(button.dataset.deleteRecord)));
+  $$('[data-resolve-conflict]', body).forEach((button) => button.addEventListener("click", () => resolveRecordConflict(button.dataset.recordId, button.dataset.resolveConflict)));
 }
 
 function renderPublish() {
@@ -1095,7 +1102,7 @@ async function saveForm(event) {
     institutionCode: clean(data.institutionCode) || "BHC",
     collectionCode: clean(data.collectionCode) || "BHC Entomology",
     publicationStatus: existing?.publicationStatus || "draft",
-    syncStatus: "queued",
+    syncStatus: existing?.syncStatus === "conflict" ? "conflict" : "queued",
     version: (existing?.version || 0) + 1,
     createdAt: existing?.createdAt || timestamp,
     updatedAt: timestamp,
@@ -1116,7 +1123,9 @@ async function saveForm(event) {
   localStorage.removeItem(FORM_DRAFT_KEY);
   await resetForm();
   await refreshState();
-  toast(`${record.catalogNumber} is saved safely on this device.${updatedPhotoCount ? ` Settings were updated for ${updatedPhotoCount} photograph${updatedPhotoCount === 1 ? "" : "s"}.` : ""}`);
+  const conflictMessage = record.syncStatus === "conflict" ? " Choose the device or Cloud version in Records before synchronization can continue." : "";
+  const settingsMessage = updatedPhotoCount ? ` Settings were updated for ${updatedPhotoCount} photograph${updatedPhotoCount === 1 ? "" : "s"}.` : "";
+  toast(`${record.catalogNumber} is saved safely on this device.${conflictMessage}${settingsMessage}`);
   setView("records");
   if (navigator.onLine) syncNow({ quiet: true });
 }
@@ -1163,14 +1172,82 @@ async function editRecord(id) {
   setView("capture");
 }
 
+async function resolveRecordConflict(id, strategy) {
+  const record = await getRecord(id);
+  if (!record || record.syncStatus !== "conflict") return;
+  const conflict = record.syncConflict || {};
+  if (strategy === "cloud") {
+    if (conflict.reason === "deleted") {
+      if (!confirm(`Remove the device copy of ${record.catalogNumber || "this record"} to accept the Cloud deletion?`)) return;
+      for (const item of await getMedia(id)) await removeMedia(item.id);
+      await removeRecord(id);
+      state.selected.delete(id);
+      await refreshState();
+      toast("The Cloud deletion was accepted. The conflicting device copy was removed.");
+      return;
+    }
+    if (!conflict.current) return;
+    await putRecord({ ...conflict.current, cloudVersion: conflict.current.version, syncStatus: "synced", syncedAt: isoNow() });
+    await refreshState();
+    toast("The Cloud version is now stored on this device.");
+    return;
+  }
+  if (strategy !== "device") return;
+  if (conflict.reason === "deleted") {
+    const newId = uid("REC");
+    const timestamp = isoNow();
+    const restored = {
+      ...record,
+      id: newId,
+      catalogNumber: await reserveCatalogNumber(),
+      publicationStatus: "draft",
+      publishedAt: null,
+      version: 1,
+      cloudVersion: 0,
+      syncStatus: "queued",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+    delete restored.syncConflict;
+    let unavailablePhotos = 0;
+    for (const item of await getMedia(id)) {
+      if (item.blob) await putMedia({ ...item, recordId: newId, publicUrl: "", syncStatus: "queued", updatedAt: timestamp });
+      else { unavailablePhotos += 1; await removeMedia(item.id); }
+    }
+    await putRecord(restored);
+    await removeRecord(id);
+    state.selected.delete(id);
+    await refreshState();
+    toast(`Restored as a new draft record.${unavailablePhotos ? ` ${unavailablePhotos} Cloud-only photograph${unavailablePhotos === 1 ? " was" : "s were"} not available offline and must be added again.` : ""}`);
+    if (navigator.onLine) syncNow({ quiet: true });
+    return;
+  }
+  const currentVersion = Number(conflict.current?.version);
+  if (!Number.isSafeInteger(currentVersion)) return;
+  const resolved = {
+    ...record,
+    cloudVersion: currentVersion,
+    version: Math.max(Number(record.version) || 1, currentVersion) + 1,
+    syncStatus: "queued",
+    updatedAt: isoNow(),
+  };
+  delete resolved.syncConflict;
+  await putRecord(resolved);
+  await refreshState();
+  toast("The device version is queued to replace the Cloud version.");
+  if (navigator.onLine) syncNow({ quiet: true });
+}
+
 async function deleteRecord(id) {
   const record = await getRecord(id);
-  if (!record || !confirm(`Delete ${record.catalogNumber} from this device? This cannot be undone.`)) return;
+  if (!record || !confirm(`Delete ${record.catalogNumber} from this device and the Cloud collection? This cannot be undone.`)) return;
+  await putRecordDeletion({ id, catalogNumber: record.catalogNumber || "", deletedAt: isoNow() });
   for (const item of await getMedia(id)) await removeMedia(item.id);
   await removeRecord(id);
   state.selected.delete(id);
   await refreshState();
-  toast(`${record.catalogNumber} was removed from this device.`);
+  toast(navigator.onLine ? `${record.catalogNumber} was removed. The Cloud deletion is being synchronized.` : `${record.catalogNumber} was removed from this device and will be deleted from the Cloud collection when this device reconnects.`);
+  if (navigator.onLine) syncNow({ quiet: true });
 }
 
 function renderMediaPreview() {
@@ -1257,14 +1334,39 @@ async function syncNow({ quiet = false } = {}) {
   $("#sync-button").textContent = "Syncing…";
   updateConnectionUI();
   try {
+    const recordDeletions = await getRecordDeletions();
+    for (const deletion of recordDeletions) {
+      const response = await fetch(`/api/records/${encodeURIComponent(deletion.id)}`, { method: "DELETE" });
+      if (!response.ok && response.status !== 404) throw new Error("A record could not be deleted from the Cloud collection.");
+      await removeRecordDeletion(deletion.id);
+    }
+
+    let conflictCount = 0;
+    let reassignedCount = 0;
     const queued = state.records.filter((record) => record.syncStatus === "queued");
-    if (queued.length) {
-      const response = await fetch("/api/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ records: queued }) });
-      if (!response.ok) throw new Error(response.status === 401 ? "Sign in is required to synchronize." : "The collection service did not accept the records.");
+    for (let offset = 0; offset < queued.length; offset += 50) {
+      const batch = queued.slice(offset, offset + 50);
+      const response = await fetch("/api/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ records: batch }) });
+      if (!response.ok) {
+        const errorPayload = (response.headers.get("content-type") || "").includes("application/json") ? await response.json() : {};
+        const invalidMessage = errorPayload.invalid?.[0]?.errors?.[0];
+        throw new Error(response.status === 401 ? "Sign in is required to synchronize." : (invalidMessage || errorPayload.error || "The collection service did not accept the records."));
+      }
       const payload = await response.json();
-      for (const id of payload.syncedIds || queued.map((record) => record.id)) {
-        const record = await getRecord(id);
-        if (record) await putRecord({ ...record, syncStatus: "synced", syncedAt: isoNow() });
+      const queuedById = new Map(batch.map((record) => [record.id, record]));
+      const accepted = Array.isArray(payload.accepted)
+        ? payload.accepted
+        : (payload.syncedIds || []).map((id) => queuedById.get(id)).filter(Boolean);
+      for (const record of accepted) {
+        const local = queuedById.get(record.id);
+        if (local?.catalogNumber && record.catalogNumber && local.catalogNumber !== record.catalogNumber) reassignedCount += 1;
+        await putRecord({ ...record, cloudVersion: record.version, syncStatus: "synced", syncedAt: isoNow() });
+      }
+      for (const conflict of payload.conflicts || []) {
+        const local = await getRecord(conflict.id);
+        if (!local) continue;
+        await putRecord({ ...local, syncStatus: "conflict", syncConflict: conflict });
+        conflictCount += 1;
       }
     }
     const queuedDeletions = state.media.filter((item) => item.syncStatus === "delete-queued");
@@ -1273,7 +1375,8 @@ async function syncNow({ quiet = false } = {}) {
       if (!response.ok && response.status !== 404) throw new Error("A photograph could not be removed from the Cloud archive.");
       await removeMedia(item.id);
     }
-    const queuedMedia = (await getMedia()).filter((item) => item.syncStatus === "queued");
+    const recordsById = new Map((await getRecords()).map((record) => [record.id, record]));
+    const queuedMedia = (await getMedia()).filter((item) => item.syncStatus === "queued" && recordsById.get(item.recordId)?.syncStatus !== "conflict");
     for (const item of queuedMedia) {
       const data = new FormData();
       data.append("id", item.id); data.append("recordId", item.recordId); data.append("file", item.blob, item.fileName);
@@ -1290,10 +1393,18 @@ async function syncNow({ quiet = false } = {}) {
     if (!cloudResponse.ok) throw new Error(cloudResponse.status === 401 ? "Manager sign-in is required to restore the Cloud archive." : "The Cloud archive could not be read.");
     const cloud = await cloudResponse.json();
     const localRecords = new Map((await getRecords()).map((record) => [record.id, record]));
+    for (const deletion of cloud.deletedRecords || []) {
+      const local = localRecords.get(deletion.id);
+      if (!local || ["queued", "conflict"].includes(local.syncStatus)) continue;
+      for (const item of await getMedia(deletion.id)) await removeMedia(item.id);
+      await removeRecord(deletion.id);
+      localRecords.delete(deletion.id);
+      state.selected.delete(deletion.id);
+    }
     for (const record of cloud.records || []) {
       const local = localRecords.get(record.id);
-      if (!local || (local.syncStatus !== "queued" && String(record.updatedAt || "") >= String(local.updatedAt || ""))) {
-        await putRecord({ ...record, syncStatus: "synced", syncedAt: isoNow() });
+      if (!local || (!["queued", "conflict"].includes(local.syncStatus) && Number(record.version || 0) >= Number(local.cloudVersion || local.version || 0))) {
+        await putRecord({ ...record, cloudVersion: record.version, syncStatus: "synced", syncedAt: isoNow() });
       }
     }
     const localMedia = new Map((await getMedia()).map((item) => [item.id, item]));
@@ -1304,7 +1415,8 @@ async function syncNow({ quiet = false } = {}) {
       }
     }
     await refreshState();
-    if (!quiet) toast("Device and cloud collection are synchronized.");
+    if (conflictCount) toast(`${conflictCount} synchronization conflict${conflictCount === 1 ? " needs" : "s need"} review in Records. No conflicting device changes were discarded.`);
+    else if (!quiet || reassignedCount) toast(`Device and cloud collection are synchronized.${reassignedCount ? ` ${reassignedCount} catalogue number${reassignedCount === 1 ? " was" : "s were"} reassigned to prevent a duplicate.` : ""}`);
   } catch (error) {
     toast(error.message || "Synchronization paused. Your local copy is safe.");
   } finally {
@@ -1317,6 +1429,7 @@ async function syncNow({ quiet = false } = {}) {
 async function updateSelectedStatus(status, { overrideReason = "" } = {}) {
   const chosen = state.records.filter((record) => state.selected.has(record.id));
   if (!chosen.length) { toast("Select one or more records in the Records view first."); return false; }
+  if (chosen.some((record) => record.syncStatus === "conflict")) { toast("Resolve synchronization conflicts before changing publication status."); return false; }
   const reviews = chosen.map((record) => ({ record, review: photoReviewFor(record) }));
   const missingCore = reviews.reduce((total, item) => total + item.review.missingCore.length, 0);
   const undocumented = reviews.reduce((total, item) => total + item.review.undocumentedDetails.length, 0);

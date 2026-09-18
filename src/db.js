@@ -1,5 +1,5 @@
 const DB_NAME = "bhcm-field-v1";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const CATALOG_SEQUENCE_KEY = "catalog-sequence";
 
 function requestResult(request) {
@@ -34,6 +34,7 @@ export function openDatabase() {
         media.createIndex("syncStatus", "syncStatus");
       }
       if (!db.objectStoreNames.contains("settings")) db.createObjectStore("settings", { keyPath: "key" });
+      if (!db.objectStoreNames.contains("recordDeletions")) db.createObjectStore("recordDeletions", { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -66,6 +67,18 @@ export function putRecord(record) {
 
 export function removeRecord(id) {
   return run("records", "readwrite", (store) => store.delete(id));
+}
+
+export function getRecordDeletions() {
+  return run("recordDeletions", "readonly", (store) => store.getAll());
+}
+
+export function putRecordDeletion(deletion) {
+  return run("recordDeletions", "readwrite", (store) => store.put(deletion));
+}
+
+export function removeRecordDeletion(id) {
+  return run("recordDeletions", "readwrite", (store) => store.delete(id));
 }
 
 export async function getMedia(recordId = null) {

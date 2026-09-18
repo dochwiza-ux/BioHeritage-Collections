@@ -180,7 +180,8 @@ td { font-size: 12px; } td strong, td small { display: block; } td small { margi
 td input, th input { width: 15px; margin: 0; }
 .table-action { border: 0; background: transparent; color: var(--clay-dark); font-size: 11px; font-weight: 800; cursor: pointer; }
 .badge { display: inline-flex; padding: 5px 8px; border-radius: 999px; background: var(--paper-2); font: 800 9px/1 ui-monospace, monospace; text-transform: uppercase; }
-.badge.queued { color: var(--clay-dark); background: #f5ddcc; }.badge.published { color: var(--ink); background: var(--lime); }.badge.ready { color: #5b4a00; background: #f4e5a9; }
+.badge.queued { color: var(--clay-dark); background: #f5ddcc; }.badge.conflict { color: #7a1d1d; background: #ffd7d7; }.badge.published { color: var(--ink); background: var(--lime); }.badge.ready { color: #5b4a00; background: #f4e5a9; }
+.conflict-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }.conflict-actions button { padding: 4px 7px; border: 1px solid currentColor; border-radius: 6px; color: #7a1d1d; background: transparent; font-size: 9px; font-weight: 800; cursor: pointer; }
 .empty-table { padding: 50px; color: var(--muted); text-align: center; }
 
 .publish-grid { max-width: 1250px; margin: 0 auto 24px; display: grid; grid-template-columns: 1.3fr .7fr; gap: 22px; }

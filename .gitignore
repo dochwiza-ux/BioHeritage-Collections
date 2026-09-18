@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+/.npm-cache/
 /.pnpm-store/
 /.pnp
 .pnp.*
@@ -39,6 +40,9 @@ yarn-error.log*
 next-env.d.ts
 /dist/
 /.wrangler/
+/.wrangler-validation/
+/.wrangler-logs/
 /.openai/
 /outputs/
+/backups/
 /work/

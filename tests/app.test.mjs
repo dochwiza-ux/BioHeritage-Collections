@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -11,12 +12,12 @@ test("offline app shell includes service worker and manifest", async () => {
   const serviceWorker = await read("src/sw.js");
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /src="\/logo\.png"/);
-  assert.match(html, /app\.css\?v=2\.1\.2/);
-  assert.match(html, /app\.js\?v=2\.1\.2/);
-  assert.match(app, /db\.js\?v=2\.1\.2/);
+  assert.match(html, /app\.css\?v=2\.1\.3/);
+  assert.match(html, /app\.js\?v=2\.1\.3/);
+  assert.match(app, /db\.js\?v=2\.1\.3/);
   assert.match(app, /serviceWorker\.register/);
   assert.match(db, /indexedDB/);
-  assert.match(serviceWorker, /bhc-field-shell-v26/);
+  assert.match(serviceWorker, /bhc-field-shell-v27/);
   assert.match(serviceWorker, /\/og\.png/);
   assert.match(serviceWorker, /cache: "reload"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
@@ -129,6 +130,8 @@ test("saved photographs can be removed safely while editing", async () => {
   assert.match(worker, /async function deleteMedia/);
   assert.match(worker, /DELETE FROM media WHERE id = \? AND owner_id = \?/);
   assert.match(worker, /await env\.MEDIA\.delete/);
+  assert.match(worker, /pending_media_deletions/);
+  assert.doesNotMatch(worker, /async function ensureSchema/);
 });
 
 test("visitor navigation follows Home, About Us, Gallery and correction order", async () => {
@@ -239,6 +242,8 @@ test("cloud writes require an authenticated user", async () => {
   assert.match(config, /"binding": "MEDIA"/);
   assert.match(config, /"bucket_name": "bhc-field-media"/);
   assert.match(config, /"run_worker_first": true/);
+  assert.match(config, /"migrations_dir": "\.\/drizzle"/);
+  assert.match(config, /"compatibility_date": "2026-09-17"/);
 });
 
 test("cloud synchronization supports archive restore and reports both storage services", async () => {
@@ -309,4 +314,129 @@ test("the public API redacts protected locality and manager-only metadata", asyn
   assert.equal(capture.camera, "Nikon D3300");
   assert.equal(capture.stackingSoftware, "Helicon Focus");
   assert.equal(capture.privateNote, undefined);
+});
+
+test("record validation rejects unsafe identifiers and strips client-only or unknown fields", async () => {
+  const { validateRecordInput } = await import("../worker/index.js");
+  const base = {
+    id: "REC-VALID-1",
+    catalogNumber: "BHC-000001",
+    commonName: "Bumble bee",
+    country: "United States",
+    eventDateStart: "2026-08-05",
+    version: 3,
+    cloudVersion: 2,
+  };
+  const valid = validateRecordInput({ ...base, unexpected: "discard me", syncConflict: { current: "discard me" } });
+  assert.equal(valid.ok, true);
+  assert.equal(valid.record.unexpected, undefined);
+  assert.equal(valid.record.syncConflict, undefined);
+  assert.equal(valid.record.cloudVersion, 2);
+  const unsafe = validateRecordInput({ ...base, id: 'REC-1" autofocus onfocus="alert(1)' });
+  assert.equal(unsafe.ok, false);
+  assert.match(unsafe.errors.join(" "), /Record ID is invalid/);
+});
+
+test("optimistic synchronization preserves conflicts instead of accepting stale changes", async () => {
+  const { decideRecordSync } = await import("../worker/index.js");
+  assert.deepEqual(decideRecordSync({ cloudVersion: 0 }, null, null), { accepted: true, nextVersion: 1 });
+  assert.deepEqual(
+    decideRecordSync({ cloudVersion: 4, updatedAt: "2026-09-17T10:00:00.000Z" }, { version: 5, updatedAt: "2026-09-17T09:00:00.000Z" }, null),
+    { accepted: false, reason: "changed", currentVersion: 5 },
+  );
+  assert.deepEqual(
+    decideRecordSync({ cloudVersion: 5 }, { version: 5 }, null),
+    { accepted: true, nextVersion: 6 },
+  );
+  assert.deepEqual(
+    decideRecordSync({ cloudVersion: 5 }, { version: 5 }, { deleted_at: "2026-09-17T12:00:00.000Z" }),
+    { accepted: false, reason: "deleted", deletedAt: "2026-09-17T12:00:00.000Z" },
+  );
+});
+
+test("server catalogue allocation formatting is stable and manager rendering escapes record identifiers", async () => {
+  const { formatCatalogNumber } = await import("../worker/index.js");
+  const app = await read("src/app.js");
+  const migration = await read("drizzle/0001_sync_integrity.sql");
+  assert.equal(formatCatalogNumber(1), "BHC-000001");
+  assert.equal(formatCatalogNumber(1234567), "BHC-1234567");
+  assert.match(app, /data-edit-record="\$\{escapeAttribute\(record\.id\)\}"/);
+  assert.match(app, /syncStatus: "conflict"/);
+  assert.match(app, /putRecordDeletion/);
+  assert.match(migration, /record_tombstones/);
+  assert.match(migration, /catalog_numbers/);
+});
+
+test("the sync-integrity migration preserves existing catalogue numbers and creates deletion tombstones", async () => {
+  const database = new DatabaseSync(":memory:");
+  try {
+    database.exec(await read("drizzle/0000_bhcm_field.sql"));
+    const insert = database.prepare(`INSERT INTO records
+      (id, owner_id, entity_type, publication_status, data_json, version, created_at, updated_at, published_at)
+      VALUES (?, ?, 'specimen', 'draft', ?, 1, ?, ?, NULL)`);
+    insert.run("REC-ONE", "manager@example.com", JSON.stringify({ catalogNumber: "BHC-000001" }), "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+    insert.run("REC-TWO", "manager@example.com", JSON.stringify({ catalogNumber: "BHCM-000002" }), "2026-01-02T00:00:00.000Z", "2026-01-02T00:00:00.000Z");
+    database.exec(await read("drizzle/0001_sync_integrity.sql"));
+    database.exec(await read("drizzle/0002_media_deletion_queue.sql"));
+    assert.deepEqual(
+      database.prepare("SELECT sequence, record_id FROM catalog_numbers ORDER BY sequence").all().map((row) => ({ ...row })),
+      [{ sequence: 1, record_id: "REC-ONE" }, { sequence: 2, record_id: "REC-TWO" }],
+    );
+    database.prepare("INSERT INTO record_tombstones (id, owner_id, deleted_at) VALUES (?, ?, ?)")
+      .run("REC-DELETED", "manager@example.com", "2026-09-17T12:00:00.000Z");
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM record_tombstones").get().count, 1);
+    database.prepare(`INSERT INTO pending_media_deletions
+      (r2_key, media_id, record_id, owner_id, requested_at) VALUES (?, ?, ?, ?, ?)`)
+      .run("manager/REC-ONE/IMG-ONE.jpg", "IMG-ONE", "REC-ONE", "manager@example.com", "2026-09-17T12:00:00.000Z");
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM pending_media_deletions").get().count, 1);
+    database.prepare(`INSERT INTO pending_media_uploads
+      (r2_key, media_id, record_id, owner_id, requested_at) VALUES (?, ?, ?, ?, ?)`)
+      .run("manager/REC-ONE/IMG-UPLOAD.jpg", "IMG-UPLOAD", "REC-ONE", "manager@example.com", "2026-09-17T12:00:00.000Z");
+    assert.equal(database.prepare("SELECT COUNT(*) AS count FROM pending_media_uploads").get().count, 1);
+  } finally {
+    database.close();
+  }
+});
+
+test("failed R2 deletions stay queued and a later retry clears them", async () => {
+  const { drainPendingMediaDeletions } = await import("../worker/index.js");
+  const rows = [{ r2_key: "manager/REC-ONE/IMG-ONE.jpg", media_id: "IMG-ONE", record_id: "REC-ONE", attempts: 0, last_error: null }];
+  const database = {
+    prepare(sql) {
+      return {
+        bind(...bindings) {
+          return {
+            async all() {
+              if (!sql.startsWith("SELECT r2_key")) throw new Error(`Unexpected all query: ${sql}`);
+              return { results: rows.map((row) => ({ ...row })) };
+            },
+            async first() {
+              if (!sql.startsWith("SELECT COUNT")) throw new Error(`Unexpected first query: ${sql}`);
+              return { count: rows.length };
+            },
+            async run() {
+              if (sql.startsWith("DELETE FROM pending_media_deletions")) {
+                const index = rows.findIndex((row) => row.r2_key === bindings[0]);
+                if (index >= 0) rows.splice(index, 1);
+              } else if (sql.startsWith("UPDATE pending_media_deletions")) {
+                const row = rows.find((item) => item.r2_key === bindings[1]);
+                if (row) { row.attempts += 1; row.last_error = bindings[0]; }
+              } else throw new Error(`Unexpected run query: ${sql}`);
+              return { success: true };
+            },
+          };
+        },
+      };
+    },
+  };
+  let fail = true;
+  const media = { async delete() { if (fail) throw new Error("temporary R2 failure"); } };
+  const first = await drainPendingMediaDeletions({ DB: database, MEDIA: media }, "manager@example.com", { mediaId: "IMG-ONE" });
+  assert.deepEqual(first, { deleted: 0, pending: 1 });
+  assert.equal(rows[0].attempts, 1);
+  assert.match(rows[0].last_error, /temporary R2 failure/);
+  fail = false;
+  const second = await drainPendingMediaDeletions({ DB: database, MEDIA: media }, "manager@example.com", { mediaId: "IMG-ONE" });
+  assert.deepEqual(second, { deleted: 1, pending: 0 });
+  assert.equal(rows.length, 0);
 });
