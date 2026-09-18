@@ -24,6 +24,17 @@ The app includes:
 Run `node build/build.mjs` to create `dist/`. The deployable Worker is emitted
 as `dist/server/index.js`, with the app shell in `dist/client/`.
 
+## Automated validation
+
+GitHub Actions runs `.github/workflows/ci.yml` for every push to `main`, every
+pull request and manual dispatch. The workflow performs a clean dependency
+install, runs the test suite, verifies generated Cloudflare types and builds the
+production bundle on Node.js 22.13.0.
+
+CI has read-only repository access and does not receive Cloudflare credentials,
+apply D1 migrations or deploy the Worker. Production releases continue to use
+the reviewed checklist below.
+
 ## Sync-integrity deployment order
 
 The `drizzle/0001_sync_integrity.sql` migration must be applied to D1 before
