@@ -39,8 +39,8 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Check Cloudflare types
-        run: npm run cf:types:check
+      - name: Generate Cloudflare types
+        run: npm run cf:types
 
       - name: Build production bundle
         run: npm run build
