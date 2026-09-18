@@ -17,7 +17,7 @@ concurrency:
 jobs:
   validate:
     name: Test, type-check, and build
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 15
 
     steps:
