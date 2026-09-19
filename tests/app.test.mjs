@@ -12,12 +12,12 @@ test("offline app shell includes service worker and manifest", async () => {
   const serviceWorker = await read("src/sw.js");
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /src="\/logo\.png"/);
-  assert.match(html, /app\.css\?v=2\.1\.3/);
-  assert.match(html, /app\.js\?v=2\.1\.3/);
-  assert.match(app, /db\.js\?v=2\.1\.3/);
+  assert.match(html, /app\.css\?v=2\.2\.0/);
+  assert.match(html, /app\.js\?v=2\.2\.0/);
+  assert.match(app, /db\.js\?v=2\.2\.0/);
   assert.match(app, /serviceWorker\.register/);
   assert.match(db, /indexedDB/);
-  assert.match(serviceWorker, /bhc-field-shell-v27/);
+  assert.match(serviceWorker, /bhc-field-shell-v28/);
   assert.match(serviceWorker, /\/og\.png/);
   assert.match(serviceWorker, /cache: "reload"/);
   assert.match(serviceWorker, /request\.mode === "navigate"/);
@@ -31,16 +31,24 @@ test("minimum scientific fields and publication checks exist", async () => {
   assert.match(html, /check-locality/);
 });
 
-test("research photographs use an adaptive anatomy-aware protocol", async () => {
+test("research photographs use a flexible image gallery with per-image labels", async () => {
   const html = await read("src/index.html");
   const app = await read("src/app.js");
-  assert.match(html, /Adaptive research protocol/);
-  assert.match(html, /Naturally wingless \/ apterous/);
+  const worker = await read("worker/index.js");
+  assert.match(html, /Flexible image set/);
+  assert.match(html, /One image or many are equally valid/);
+  assert.match(app, /IMAGE_PART_OPTIONS/);
   assert.match(app, /habitus-dorsal/);
   assert.match(app, /habitus-ventral/);
   assert.match(app, /wing-surface/);
-  assert.match(app, /WING_PHOTO_TYPES/);
-  assert.match(app, /not_applicable/);
+  assert.match(app, /specimen-label/);
+  assert.match(app, /data-pending-image-part/);
+  assert.match(app, /data-stored-image-part/);
+  assert.match(app, /metadata-queued/);
+  assert.match(app, /method: "PATCH"/);
+  assert.match(worker, /async function updateMediaMetadata/);
+  assert.match(worker, /request\.method === "PATCH"/);
+  assert.doesNotMatch(html, /0 \/ 16/);
 });
 
 test("publishing supports an audited manager override and a visitor-only catalogue", async () => {
@@ -83,10 +91,10 @@ test("catalogue numbers sequence persistently and capture metadata belongs to ea
   assert.match(db, /CATALOG_SEQUENCE_KEY/);
   assert.match(db, /BHC-\$\{String\(sequence\)\.padStart\(6, "0"\)\}/);
   assert.match(db, /\^BHCM\?/);
-  assert.match(app, /data-capture-setting="captureMode"/);
+  assert.match(html, /id="supplemental-capture-mode"/);
   assert.match(app, /captureMetadata: \{ \.\.\.\(item\.captureMetadata/);
-  assert.match(app, /for \(const \[photoType, captureMetadata\] of Object\.entries\(state\.viewCaptureSettings\)\)/);
-  assert.match(app, /Settings were updated for/);
+  assert.match(app, /readSupplementalCaptureMetadata/);
+  assert.match(app, /photograph label/);
   assert.match(app, /research-capture-metadata/);
   assert.match(app, /\["Camera", metadata\.camera\]/);
   assert.doesNotMatch(html, /name="photoRig"/);
@@ -149,7 +157,7 @@ test("visitor navigation follows Home, About Us, Gallery and correction order", 
   assert.match(app, /prepareCorrectionEmail/);
   assert.match(app, /BHC Virtual Collections correction suggestion/);
   assert.match(app, /document\.title = "BHC Virtual Collections"/);
-  assert.match(app, /photoType === "head-frontal"/);
+  assert.match(app, /renderHomeShowcase/);
   assert.match(app, /\{ brand: true \}/);
   assert.match(app, /setInterval\(showNextHomeFrontView, 8000\)/);
   assert.match(app, /renderLatestAdditions/);

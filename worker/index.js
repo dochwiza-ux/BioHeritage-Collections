@@ -21,6 +21,29 @@ const MAX_SYNC_RECORDS = 100;
 const RECORD_ID_PATTERN = /^REC-[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const MEDIA_ID_PATTERN = /^IMG-[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const CATALOG_NUMBER_PATTERN = /^BHCM?-\d{6,9}$/;
+const IMAGE_PART_LABELS = new Map([
+  ["general", "Additional image"],
+  ["habitus-dorsal", "Whole specimen — top / dorsal"],
+  ["habitus-lateral", "Whole specimen — side / lateral"],
+  ["habitus-ventral", "Whole specimen — bottom / ventral"],
+  ["head-frontal", "Head — front"],
+  ["head-dorsal", "Head — top / dorsal"],
+  ["compound-eye", "Compound eye"],
+  ["antennae", "Antenna or antennae"],
+  ["mouthparts-frontal", "Mouthparts"],
+  ["thorax-dorsal", "Thorax"],
+  ["wings-overall", "Wing or elytron — overall"],
+  ["wing-surface", "Wing venation or elytral surface"],
+  ["legs", "Leg, tarsus or claws"],
+  ["hind-leg-special", "Hind-leg special structures"],
+  ["abdomen-tergites", "Abdomen — top / tergites"],
+  ["abdomen-sternites", "Abdomen — bottom / sternites"],
+  ["terminalia", "Terminalia or genital structures"],
+  ["surface-detail", "Fine surface texture or hairs"],
+  ["specimen-label", "Specimen or collection label"],
+  ["scale-reference", "Scale or measurement reference"],
+  ["other", "Other useful detail"],
+]);
 const RECORD_TEXT_LIMITS = {
   catalogNumber: 32,
   identificationStatus: 80,
@@ -484,6 +507,7 @@ async function uploadMedia(request, env) {
   const captureJson = JSON.stringify(captureMetadata);
   const file = form.get("file");
   if (!MEDIA_ID_PATTERN.test(id) || !validRecordId(recordId) || !file || typeof file === "string") return json({ error: "Missing or invalid media upload fields." }, 400);
+  if (!IMAGE_PART_LABELS.has(photoType)) return json({ error: "Choose a valid insect part or image type." }, 400);
   if (file.size > 100 * 1024 * 1024) return json({ error: "Images must be 100 MB or smaller." }, 413);
   if (["image/svg+xml", "text/html", "application/xhtml+xml"].includes(file.type)) return json({ error: "This file type is not accepted for research images." }, 415);
   const owned = await env.DB.prepare("SELECT id FROM records WHERE id = ? AND owner_id = ?").bind(recordId, owner).first();
@@ -526,6 +550,24 @@ async function uploadMedia(request, env) {
     await drainPendingMediaDeletions(env, owner, { mediaId: id });
   }
   return json({ id, photoType, photoLabel, orientation, captureMetadata, publicUrl: `/media/${encodeURIComponent(id)}` });
+}
+
+async function updateMediaMetadata(request, env, id) {
+  const owner = await requireManager(request, env);
+  if (!MEDIA_ID_PATTERN.test(id)) return json({ error: "Media ID is invalid." }, 400);
+  const payload = await readJsonBody(request, 16 * 1024);
+  const photoType = String(payload.photoType || "").slice(0, 80);
+  if (!IMAGE_PART_LABELS.has(photoType)) return json({ error: "Choose a valid insect part or image type." }, 400);
+  const photoLabel = IMAGE_PART_LABELS.get(photoType);
+  const orientation = String(payload.orientation || "").slice(0, 40);
+  const captureMetadata = isPlainObject(payload.captureMetadata) ? payload.captureMetadata : {};
+  const captureJson = JSON.stringify(captureMetadata);
+  if (captureJson.length > 8000) return json({ error: "Capture metadata is too large." }, 413);
+  const updatedAt = new Date().toISOString();
+  const result = await env.DB.prepare(`UPDATE media SET photo_type = ?, photo_label = ?, orientation = ?, capture_json = ?, updated_at = ? WHERE id = ? AND owner_id = ?`)
+    .bind(photoType, photoLabel, orientation, captureJson, updatedAt, id, owner).run();
+  if (Number(result.meta?.changes) !== 1) return json({ error: "Image not found." }, 404);
+  return json({ id, photoType, photoLabel, orientation, captureMetadata, updatedAt, publicUrl: `/media/${encodeURIComponent(id)}` });
 }
 
 async function drainPendingMediaUploads(env, owner, { limit = 25, gracePeriodMs = 15 * 60 * 1000 } = {}) {
@@ -657,6 +699,9 @@ const worker = {
       if (url.pathname === "/api/media" && request.method === "POST") {
         if (!env.MEDIA) return json({ error: "Cloud image storage is not configured." }, 503);
         return uploadMedia(request, env);
+      }
+      if (url.pathname.startsWith("/api/media/") && request.method === "PATCH") {
+        return updateMediaMetadata(request, env, decodeURIComponent(url.pathname.slice(11)));
       }
       if (url.pathname.startsWith("/media/") && request.method === "GET") {
         if (!env.MEDIA) return json({ error: "Cloud image storage is not configured." }, 503);

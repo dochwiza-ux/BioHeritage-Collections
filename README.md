@@ -1,4 +1,4 @@
-# BHC Field v2.1.3
+# BHC Field v2.2.0
 
 BHC Field is an offline-first biodiversity collection app for Bio-Heritage Collections. It captures
 specimen identity, country-first locations, collection events, preparation
@@ -9,14 +9,14 @@ The app includes:
 
 - installable PWA behavior and an offline app shell;
 - IndexedDB records and queued media on the device;
-- an adaptive 16-view anatomical research-photography protocol with documented omissions;
+- a flexible research-image gallery where each specimen can have any number of photographs, each classified by insect part or image type;
 - server-authoritative sequential catalogue numbers, with local provisional numbers reconciled safely during synchronization;
 - specimen provenance, citation, data rights and per-image reuse terms shared between manager and visitor views;
 - explicit open, generalized or withheld public-locality controls with server-side redaction;
 - optimistic synchronization using server revisions, explicit manager conflict resolution and deletion tombstones;
 - authenticated write endpoints and anonymous read-only public records;
 - publication review checks with an audited manager override;
-- visitor-facing Home, About Us, Gallery and correction pages, rotating front-view photography, latest additions, signed images and research-photo requests;
+- visitor-facing Home, About Us, Gallery and correction pages, rotating collection photography, latest additions, signed images and research-photo requests;
 - precision image inspection with cursor-anchored wheel zoom, a drawable Zoom Window, live drag zoom, pan controls and Zoom All;
 - a Cloudflare Access-secured manager served from a masked archive address;
 - Darwin Core-style CSV export and JSON backup/restore.
@@ -37,6 +37,21 @@ the reviewed checklist below.
 
 The project uses npm and `package-lock.json` as its only package-manager lockfile.
 This also ensures Cloudflare Workers Builds selects `npm ci` automatically.
+
+## Flexible image gallery
+
+The manager accepts one or many files for a specimen. Every image is classified
+from its own dropdown as a whole-specimen view, insect part, label, scale or
+other useful detail. Publication no longer assumes a fixed number of views; it
+requires at least one image and a label for every attached image unless the
+manager records an audited publication override.
+
+Image classification continues to use the existing D1 `media.photo_type` and
+`media.photo_label` columns, so v2.2.0 needs no schema migration. New files are
+stored in R2 through the existing upload flow. Relabeling an existing image uses
+`PATCH /api/media/:id` to update D1 metadata without transferring the original
+high-resolution R2 object again. Existing legacy view labels remain readable and
+can be changed from the same dropdown while editing a record.
 
 ## Sync-integrity deployment order
 
