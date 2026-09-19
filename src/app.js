@@ -1,30 +1,32 @@
-import { getMedia, getRecord, getRecordDeletions, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, putRecordDeletion, removeMedia, removeRecord, removeRecordDeletion, reserveCatalogNumber } from "./db.js?v=2.1.3";
+import { getMedia, getRecord, getRecordDeletions, getRecords, mergeRecords, peekNextCatalogNumber, putMedia, putRecord, putRecordDeletion, removeMedia, removeRecord, removeRecordDeletion, reserveCatalogNumber } from "./db.js?v=2.2.0";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const FORM_DRAFT_KEY = "bhcm-field-form-draft";
 const VISITOR_THEME_KEY = "bhc-visitor-theme";
 const COUNTRY_SEEDS = ["United States", "Zimbabwe", "South Africa", "Botswana", "Mozambique", "Zambia", "Malawi", "Kenya", "Tanzania", "Canada", "United Kingdom"];
-const PHOTO_PROTOCOL = [
-  { id: "habitus-dorsal", label: "Top view — dorsal habitus", core: true, guidance: "Whole specimen; record body outline, head, thorax, abdomen and appendage position." },
-  { id: "habitus-lateral", label: "Side view — lateral habitus", core: true, guidance: "Whole specimen in profile; show head, thorax, legs and abdomen." },
-  { id: "head-frontal", label: "Front view — head", core: true, guidance: "Show eyes, antennal insertions, face or clypeus, and mouthparts." },
-  { id: "habitus-ventral", label: "Bottom view — ventral habitus", core: true, guidance: "Show ventral thorax and abdomen when the specimen can be positioned safely." },
-  { id: "head-dorsal", label: "Head — dorsal detail", guidance: "Document vertex, frons, occiput, hair pattern and ocelli where present." },
-  { id: "compound-eye", label: "Compound eye", guidance: "Focus-stack the complete eye surface for morphology and identification." },
-  { id: "antennae", label: "Antennae", guidance: "Show the complete antenna, insertion and enough detail to compare segments." },
-  { id: "mouthparts-frontal", label: "Mouthparts — frontal", guidance: "Document mandibles, palps, labrum and clypeus for feeding type and classification." },
-  { id: "thorax-dorsal", label: "Thorax — dorsal detail", guidance: "Record pronotum or mesosoma, mesoscutum, scutellum, colour and surface texture." },
-  { id: "legs", label: "Legs, tarsus and claws", guidance: "Show femur, tibia, tarsus, claws, tibial spurs, segmentation and setation." },
-  { id: "abdomen-tergites", label: "Abdomen — dorsal / tergites", guidance: "Record dorsal segments or metasoma, banding, texture, hair density and terminal pattern." },
-  { id: "abdomen-sternites", label: "Abdomen — ventral / sternites", guidance: "Record sterna and terminal area only where appropriate and permitted." },
-  { id: "wings-overall", label: "Wings or elytra — overall", conditional: true, guidance: "When present, show forewing and hindwing condition, or complete elytral pattern." },
-  { id: "wing-surface", label: "Wing venation or elytral surface", conditional: true, guidance: "When present, record venation, stripes, punctures, microsculpture, setae, wear or damage." },
-  { id: "hind-leg-special", label: "Hind-leg special structures", conditional: true, guidance: "Where present, capture swollen femur, corbicula, basitarsus, spurs or other diagnostic structures." },
-  { id: "surface-detail", label: "Fine surface texture", conditional: true, guidance: "Capture diagnostic sculpture, punctation, hairs or setation at useful magnification." },
+const IMAGE_PART_OPTIONS = [
+  { id: "habitus-dorsal", label: "Whole specimen — top / dorsal" },
+  { id: "habitus-lateral", label: "Whole specimen — side / lateral" },
+  { id: "habitus-ventral", label: "Whole specimen — bottom / ventral" },
+  { id: "head-frontal", label: "Head — front" },
+  { id: "head-dorsal", label: "Head — top / dorsal" },
+  { id: "compound-eye", label: "Compound eye" },
+  { id: "antennae", label: "Antenna or antennae" },
+  { id: "mouthparts-frontal", label: "Mouthparts" },
+  { id: "thorax-dorsal", label: "Thorax" },
+  { id: "wings-overall", label: "Wing or elytron — overall" },
+  { id: "wing-surface", label: "Wing venation or elytral surface" },
+  { id: "legs", label: "Leg, tarsus or claws" },
+  { id: "hind-leg-special", label: "Hind-leg special structures" },
+  { id: "abdomen-tergites", label: "Abdomen — top / tergites" },
+  { id: "abdomen-sternites", label: "Abdomen — bottom / sternites" },
+  { id: "terminalia", label: "Terminalia or genital structures" },
+  { id: "surface-detail", label: "Fine surface texture or hairs" },
+  { id: "specimen-label", label: "Specimen or collection label" },
+  { id: "scale-reference", label: "Scale or measurement reference" },
+  { id: "other", label: "Other useful detail" },
 ];
-const WING_PHOTO_TYPES = ["wings-overall", "wing-surface"];
-const PHOTO_OMISSION_LABELS = { not_visible: "Not visible", not_applicable: "Not applicable", restricted: "Restricted" };
 const CAPTURE_MODE_LABELS = { single: "Single frame", "macro-single": "Macro — single frame", "focus-stack": "Focus stack", "macro-stack": "Macro — focus stack", microscope: "Microscope image" };
 
 const state = {
@@ -36,8 +38,7 @@ const state = {
   selected: new Set(),
   pendingFiles: [],
   editingRecordId: null,
-  photoOmissions: {},
-  viewCaptureSettings: {},
+  mediaEdits: new Map(),
   installPrompt: null,
   syncing: false,
   cloudReady: false,
@@ -90,8 +91,8 @@ function today() { return new Date().toISOString().slice(0, 10); }
 function clean(value) { return String(value ?? "").trim(); }
 function isDisplayableMime(value) { return /image\/(jpeg|png|webp|gif|avif)/i.test(value || ""); }
 
-function protocolSlot(id) {
-  return PHOTO_PROTOCOL.find((slot) => slot.id === id);
+function imagePartOption(id) {
+  return IMAGE_PART_OPTIONS.find((option) => option.id === id);
 }
 
 function storedMediaFor(recordId = state.editingRecordId) {
@@ -99,47 +100,17 @@ function storedMediaFor(recordId = state.editingRecordId) {
 }
 
 function photoReviewFor(record) {
-  const captured = new Set(storedMediaFor(record.id).map((item) => item.photoType).filter((id) => protocolSlot(id)));
-  const omissions = record.photoOmissions || {};
-  const missingCore = PHOTO_PROTOCOL.filter((slot) => slot.core && !captured.has(slot.id) && !omissions[slot.id]);
-  const undocumentedDetails = PHOTO_PROTOCOL.filter((slot) => !slot.core && !captured.has(slot.id) && !omissions[slot.id]);
-  const documented = PHOTO_PROTOCOL.filter((slot) => captured.has(slot.id) || omissions[slot.id]).length;
-  return { captured, omissions, missingCore, undocumentedDetails, documented, ready: !missingCore.length && !undocumentedDetails.length };
+  const images = storedMediaFor(record.id);
+  const unlabeled = images.filter((item) => !imagePartOption(item.photoType));
+  return { images, unlabeled, documented: images.length - unlabeled.length, ready: images.length > 0 && !unlabeled.length };
 }
 
-function orientationOptions(slot) {
-  if (!["habitus-lateral", "compound-eye", "antennae", "legs", "hind-leg-special"].includes(slot.id)) return "";
-  return `<select data-photo-orientation="${slot.id}" aria-label="Orientation for ${escapeAttribute(slot.label)}"><option value="">Side not recorded</option><option value="left">Left</option><option value="right">Right</option><option value="both">Both / paired</option></select>`;
+function imagePartLabel(item) {
+  return imagePartOption(item.photoType)?.label || item.photoLabel || "Choose an insect part or image type";
 }
 
-function captureSettingsFor(slotId) {
-  const remembered = state.viewCaptureSettings[slotId];
-  if (remembered) return remembered;
-  const previous = [...storedMediaFor()].reverse().find((item) => item.photoType === slotId && item.captureMetadata);
-  return { captureMode: "single", ...(previous?.captureMetadata || {}) };
-}
-
-function captureSettingsMarkup(slot) {
-  const settings = captureSettingsFor(slot.id);
-  const savedCount = storedMediaFor().filter((item) => item.photoType === slot.id).length;
-  const field = (key, label, options = {}) => `<label>${label}<input data-capture-setting="${key}" data-photo-slot="${slot.id}" value="${escapeAttribute(settings[key] || "")}" ${options.type ? `type="${options.type}"` : ""} ${options.min ? `min="${options.min}"` : ""} ${options.step ? `step="${options.step}"` : ""} placeholder="${escapeAttribute(options.placeholder || "")}"></label>`;
-  return `<details class="view-capture-settings"><summary>Settings for this view <span>${escapeHtml(CAPTURE_MODE_LABELS[settings.captureMode] || "Single frame")}${settings.camera ? ` · ${escapeHtml(settings.camera)}` : ""}${settings.lens ? ` · ${escapeHtml(settings.lens)}` : ""}</span></summary>${savedCount ? `<p class="view-settings-note">Saving the record updates ${savedCount === 1 ? "this photograph" : `all ${savedCount} photographs`} attached to this view.</p>` : ""}<div class="view-settings-grid">
-    <label>Capture type<select data-capture-setting="captureMode" data-photo-slot="${slot.id}">${Object.entries(CAPTURE_MODE_LABELS).map(([value, label]) => `<option value="${value}" ${settings.captureMode === value ? "selected" : ""}>${escapeHtml(label)}</option>`).join("")}</select></label>
-    ${field("camera", "Camera body", { placeholder: "Camera used for this view" })}
-    ${field("lens", "Lens / objective", { placeholder: "Lens used for this view" })}
-    ${field("magnification", "Magnification", { placeholder: "e.g. 1× or 5×" })}
-    ${field("stackFrames", "Stack frames", { type: "number", min: "1", step: "1" })}
-    ${field("stepMicrons", "Step size (µm)", { type: "number", min: "0", step: "any" })}
-    ${field("stackingSoftware", "Stacking software", { placeholder: "e.g. Helicon Focus" })}
-    ${field("iso", "ISO", { placeholder: "e.g. 100" })}
-    ${field("aperture", "Aperture", { placeholder: "e.g. f/8" })}
-    ${field("shutterSpeed", "Shutter speed", { placeholder: "e.g. 1/200 s" })}
-    ${field("lighting", "Lighting", { placeholder: "Lighting used for this view" })}
-    ${field("photographer", "Photographer")}
-    ${field("captureDate", "Capture date", { type: "date" })}
-    ${field("license", "Image licence", { placeholder: "e.g. CC BY 4.0" })}
-    ${field("notes", "View notes", { placeholder: "Stacking, scale or processing notes" })}
-  </div></details>`;
+function imagePartOptionsMarkup(selected = "") {
+  return `<option value="" ${imagePartOption(selected) ? "" : "selected"}>Choose insect part or image type…</option>${IMAGE_PART_OPTIONS.map((option) => `<option value="${option.id}" ${selected === option.id ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}`;
 }
 
 function readSupplementalCaptureMetadata() {
@@ -391,7 +362,7 @@ function showHomeFeature() {
   }
   const { item, record } = feature;
   const source = catalogueMediaSource(item);
-  const label = item.photoLabel || protocolSlot(item.photoType)?.label || "Front view";
+  const label = imagePartLabel(item);
   image.src = source;
   image.alt = `${titleFor(record)} — ${label}`;
   caption.textContent = `${label} · ${record.catalogNumber || titleFor(record)} · ${scientificNameFor(record)}`;
@@ -401,7 +372,7 @@ function showHomeFeature() {
 function renderHomeShowcase(records, media) {
   const recordsById = new Map(records.map((record) => [record.id, record]));
   const publishedFrontViews = media
-    .filter((item) => item.photoType === "head-frontal" && recordsById.has(item.recordId) && isDisplayableMime(item.mimeType || item.blob?.type) && catalogueMediaSource(item))
+    .filter((item) => recordsById.has(item.recordId) && isDisplayableMime(item.mimeType || item.blob?.type) && catalogueMediaSource(item))
     .map((item) => ({ item, record: recordsById.get(item.recordId) }));
   homeShowcase.frontViews = [{ brand: true }, ...publishedFrontViews];
   homeShowcase.index = 0;
@@ -486,7 +457,7 @@ function openImageViewer(item, record) {
   const image = $("#image-viewer-image");
   if (!dialog || !image || !isDisplayableMime(item.mimeType || item.blob?.type)) return;
   releaseImageViewerSource();
-  const label = item.photoLabel || protocolSlot(item.photoType)?.label || "Specimen photograph";
+  const label = imagePartLabel(item);
   imageViewer.objectUrl = !item.publicUrl && item.blob ? URL.createObjectURL(item.blob) : "";
   image.alt = `${titleFor(record)} — ${label}`;
   $("#image-viewer-title").textContent = `${label} · ${record.catalogNumber || titleFor(record)}`;
@@ -635,65 +606,24 @@ function bindImageViewer() {
   resetImageViewer();
 }
 
-function renderPhotoProtocol() {
-  const host = $("#photo-protocol-grid");
-  if (!host) return;
+function renderPhotoGalleryStatus() {
   const items = [...storedMediaFor(), ...state.pendingFiles];
-  const documented = PHOTO_PROTOCOL.filter((slot) => items.some((item) => item.photoType === slot.id) || state.photoOmissions[slot.id]).length;
-  $("#photo-score").textContent = `${documented} / ${PHOTO_PROTOCOL.length}`;
-  $("#photo-progress-bar").style.width = `${Math.round((documented / PHOTO_PROTOCOL.length) * 100)}%`;
-  host.innerHTML = PHOTO_PROTOCOL.map((slot, index) => {
-    const count = items.filter((item) => item.photoType === slot.id).length;
-    const omission = state.photoOmissions[slot.id] || "";
-    const statusClass = count ? "captured" : (omission ? "omitted" : "missing");
-    const status = count ? `${count} image${count === 1 ? "" : "s"} captured` : (PHOTO_OMISSION_LABELS[omission] || "Still needed");
-    const kind = slot.core ? "Baseline" : (slot.conditional ? "Conditional" : "Detail");
-    return `<article class="photo-slot ${statusClass}">
-      <div class="photo-slot-top"><span class="photo-slot-number">${String(index + 1).padStart(2, "0")}</span><div class="photo-slot-copy"><h4>${escapeHtml(slot.label)}</h4><p>${escapeHtml(slot.guidance)}</p></div><span class="photo-kind ${slot.core ? "" : "detail"}">${kind}</span></div>
-      <div class="photo-slot-actions">
-        <label class="photo-add">Add photograph<input type="file" data-photo-input="${slot.id}" accept="image/*,.tif,.tiff,.dng,.nef,.cr2,.arw" multiple></label>
-        ${orientationOptions(slot)}
-        <select data-photo-omission="${slot.id}" aria-label="Omission status for ${escapeAttribute(slot.label)}"><option value="">Capture requested</option><option value="not_visible" ${omission === "not_visible" ? "selected" : ""}>Not visible</option><option value="not_applicable" ${omission === "not_applicable" ? "selected" : ""}>Not applicable</option><option value="restricted" ${omission === "restricted" ? "selected" : ""}>Restricted</option></select>
-      </div>
-      ${captureSettingsMarkup(slot)}
-      <span class="photo-slot-state">${escapeHtml(status)}</span>
-    </article>`;
-  }).join("");
-  $$('[data-photo-input]', host).forEach((input) => input.addEventListener("change", () => {
-    const slot = protocolSlot(input.dataset.photoInput);
-    const orientation = $(`[data-photo-orientation="${slot.id}"]`, input.closest(".photo-slot"))?.value || "";
-    addPendingFiles([...input.files], { photoType: slot.id, photoLabel: slot.label, orientation, captureMetadata: { ...captureSettingsFor(slot.id) } });
-  }));
-  $$('[data-capture-setting]', host).forEach((control) => control.addEventListener("input", () => {
-    const slotId = control.dataset.photoSlot;
-    state.viewCaptureSettings[slotId] = { ...captureSettingsFor(slotId), [control.dataset.captureSetting]: control.value };
-    for (const item of state.pendingFiles.filter((pending) => pending.photoType === slotId)) item.captureMetadata = { ...state.viewCaptureSettings[slotId] };
-  }));
-  $$('[data-photo-omission]', host).forEach((select) => select.addEventListener("change", () => {
-    if (select.value) state.photoOmissions[select.dataset.photoOmission] = select.value;
-    else delete state.photoOmissions[select.dataset.photoOmission];
-    saveDraft();
-    renderPhotoProtocol();
-  }));
+  const labeled = items.filter((item) => imagePartOption((state.mediaEdits.get(item.id) || item).photoType)).length;
+  const score = $("#photo-score");
+  const summary = $("#photo-gallery-summary");
+  if (score) score.textContent = `${items.length} image${items.length === 1 ? "" : "s"}`;
+  if (summary) summary.textContent = !items.length
+    ? "Add any number of photographs, then identify each one from its dropdown."
+    : (labeled === items.length
+      ? `All ${items.length} image${items.length === 1 ? " is" : "s are"} labeled.`
+      : `${labeled} of ${items.length} labeled — choose a part or image type for the remaining ${items.length - labeled}.`);
 }
 
 function addPendingFiles(files, metadata = {}) {
   const valid = files.filter((file) => file.size <= 100 * 1024 * 1024 && (file.type.startsWith("image/") || /\.(tif|tiff|dng|nef|cr2|arw)$/i.test(file.name)));
-  state.pendingFiles.push(...valid.map((file) => ({ file, photoType: metadata.photoType || "general", photoLabel: metadata.photoLabel || "Additional image", orientation: metadata.orientation || "", captureMetadata: { ...(metadata.captureMetadata || { captureMode: "single" }) } })));
+  state.pendingFiles.push(...valid.map((file) => ({ file, photoType: "", photoLabel: "", orientation: "", captureMetadata: { ...(metadata.captureMetadata || { captureMode: "single" }) } })));
   if (valid.length !== files.length) toast("Some files were skipped. Research images must be a supported image type and under 100 MB.");
-  renderPhotoProtocol();
   renderMediaPreview();
-}
-
-function applyWingCondition() {
-  const value = $("#wing-condition")?.value || "";
-  const reason = ["wingless", "not-applicable"].includes(value) ? "not_applicable" : (value === "lost-damaged" ? "not_visible" : "");
-  for (const id of WING_PHOTO_TYPES) {
-    if (reason) state.photoOmissions[id] = reason;
-    else if (["not_applicable", "not_visible"].includes(state.photoOmissions[id])) delete state.photoOmissions[id];
-  }
-  saveDraft();
-  renderPhotoProtocol();
 }
 
 function toast(message) {
@@ -818,7 +748,7 @@ async function openManagerRecordFromQuery() {
 
 function renderAll() {
   const queuedRecords = state.records.filter((record) => ["queued", "conflict"].includes(record.syncStatus)).length;
-  const queuedMedia = state.media.filter((item) => ["queued", "delete-queued"].includes(item.syncStatus)).length;
+  const queuedMedia = state.media.filter((item) => ["queued", "metadata-queued", "delete-queued"].includes(item.syncStatus)).length;
   const queued = queuedRecords + queuedMedia;
   const ready = state.records.filter((record) => record.publicationStatus === "ready").length;
   const published = state.records.filter((record) => record.publicationStatus === "published").length;
@@ -831,7 +761,7 @@ function renderAll() {
   renderRecent();
   renderRecords();
   renderPublish();
-  renderPhotoProtocol();
+  renderMediaPreview();
   updateLocationSuggestions();
   updateConnectionUI();
 }
@@ -879,7 +809,7 @@ async function checkCloudAvailability() {
 function updateConnectionUI() {
   const online = navigator.onLine;
   const cloudReady = online && state.cloudReady;
-  const queued = state.records.filter((record) => ["queued", "conflict"].includes(record.syncStatus)).length + state.media.filter((item) => ["queued", "delete-queued"].includes(item.syncStatus)).length;
+  const queued = state.records.filter((record) => ["queued", "conflict"].includes(record.syncStatus)).length + state.media.filter((item) => ["queued", "metadata-queued", "delete-queued"].includes(item.syncStatus)).length;
   const label = state.localPreview
     ? "Local preview · cloud not connected"
     : (!online ? "Offline · device archive active" : (cloudReady ? "Online · cloud connected" : "Online · device-only mode"));
@@ -933,7 +863,7 @@ function renderRecords() {
       <td><strong>${escapeHtml(record.catalogNumber)}</strong><small><i>${escapeHtml(titleFor(record))}</i>${record.commonName && record.scientificName ? ` · ${escapeHtml(record.commonName)}` : ""}</small></td>
       <td>${escapeHtml(locationFor(record))}</td>
       <td>${escapeHtml(record.eventDateStart || "Not recorded")}</td>
-      <td><span class="badge photo-count ${photoReview.ready ? "" : "incomplete"}">${photoReview.documented}/${PHOTO_PROTOCOL.length}</span><small>${photoReview.ready ? "Research set documented" : "Needs review"}</small></td>
+      <td><span class="badge photo-count ${photoReview.ready ? "" : "incomplete"}">${photoReview.images.length} image${photoReview.images.length === 1 ? "" : "s"}</span><small>${photoReview.ready ? "All images labeled" : (photoReview.images.length ? `${photoReview.unlabeled.length} need a label` : "No images yet")}</small></td>
       <td><span class="badge ${publicationClass}">${escapeHtml(record.publicationStatus)}</span></td>
       <td><span class="badge ${syncClass}">${escapeHtml(record.syncStatus)}</span>${conflictActions}</td>
       <td><button class="table-action" data-edit-record="${escapeAttribute(record.id)}">Edit</button> · <button class="table-action" data-delete-record="${escapeAttribute(record.id)}">Delete</button></td>
@@ -956,7 +886,7 @@ function renderPublish() {
   const overrideBox = $("#photo-override-box");
   if (!summary) return;
   if (!selected.length) {
-    summary.textContent = "Select records to review photographic coverage.";
+    summary.textContent = "Select records to review their image labels.";
     if (overrideBox) {
       overrideBox.hidden = true;
       $("#check-photo-override").checked = false;
@@ -966,13 +896,13 @@ function renderPublish() {
     return;
   }
   const reviews = selected.map(photoReviewFor);
-  const missingCore = reviews.reduce((total, review) => total + review.missingCore.length, 0);
-  const undocumented = reviews.reduce((total, review) => total + review.undocumentedDetails.length, 0);
-  summary.textContent = !missingCore && !undocumented
-    ? "All selected records have documented research-photo coverage."
-    : `${missingCore} missing core view${missingCore === 1 ? "" : "s"}; ${undocumented} diagnostic detail${undocumented === 1 ? "" : "s"} still need a photograph or omission reason.`;
+  const withoutImages = reviews.filter((review) => !review.images.length).length;
+  const unlabeled = reviews.reduce((total, review) => total + review.unlabeled.length, 0);
+  summary.textContent = !withoutImages && !unlabeled
+    ? "Every selected record has at least one image, and every image is labeled."
+    : `${withoutImages} record${withoutImages === 1 ? " has" : "s have"} no images; ${unlabeled} image${unlabeled === 1 ? " needs" : "s need"} an insect-part or image-type label.`;
   if (overrideBox) {
-    overrideBox.hidden = !missingCore && !undocumented;
+    overrideBox.hidden = !withoutImages && !unlabeled;
     if (overrideBox.hidden) {
       $("#check-photo-override").checked = false;
       $("#photo-override-reason").value = "";
@@ -1040,7 +970,7 @@ function openSpecimen(id) {
   const media = state.catalogueMedia.filter((item) => item.recordId === id && (item.publicUrl || item.blob));
   const gallery = media.map((item) => {
     const source = catalogueMediaSource(item);
-    const label = item.photoLabel || protocolSlot(item.photoType)?.label || "Specimen photograph";
+    const label = imagePartLabel(item);
     const orientation = item.orientation ? `${item.orientation} side` : "";
     const captureDetails = captureMetadataMarkup(publicCaptureMetadata(item, record));
     if (!isDisplayableMime(item.mimeType || item.blob?.type)) return `<figure class="research-photo research-file"><div class="media-file-fallback">Original research file</div><figcaption>${escapeHtml(label)}<span>${escapeHtml([item.fileName || item.mimeType || "Image file", orientation].filter(Boolean).join(" · "))}</span>${source ? `<a class="button secondary compact" href="${escapeAttribute(source)}" target="_blank" rel="noopener">Open original</a>` : ""}</figcaption>${captureDetails}</figure>`;
@@ -1080,6 +1010,15 @@ async function saveForm(event) {
     $("#scientific-name").focus();
     return;
   }
+  const galleryItems = [
+    ...storedMediaFor().map((item) => ({ ...item, ...(state.mediaEdits.get(item.id) || {}) })),
+    ...state.pendingFiles,
+  ];
+  if (galleryItems.some((item) => !imagePartOption(item.photoType))) {
+    toast("Choose an insect part or image type for every photograph before saving.");
+    $$('[data-pending-image-part], [data-stored-image-part]').find((select) => !select.value)?.focus();
+    return;
+  }
   const existing = data.id ? await getRecord(data.id) : null;
   const timestamp = isoNow();
   const locationId = clean(data.locationId) || locationIdFor(data);
@@ -1091,8 +1030,8 @@ async function saveForm(event) {
     entityType: "specimen",
     locationId,
     catalogNumber,
-    photoProtocolVersion: 1,
-    photoOmissions: { ...state.photoOmissions },
+    imageGalleryVersion: 2,
+    photoOmissions: { ...(existing?.photoOmissions || {}) },
     localityPrivacy: clean(data.localityPrivacy) || "generalized",
     rightsHolder: clean(data.rightsHolder) || "Bio-Heritage Collections",
     recordLicense: clean(data.recordLicense) || "All rights reserved",
@@ -1108,13 +1047,12 @@ async function saveForm(event) {
     updatedAt: timestamp,
   };
   await putRecord(record);
-  let updatedPhotoCount = 0;
-  for (const [photoType, captureMetadata] of Object.entries(state.viewCaptureSettings)) {
-    const savedImages = state.media.filter((item) => item.recordId === record.id && item.photoType === photoType);
-    for (const item of savedImages) {
-      await putMedia({ ...item, captureMetadata: { ...(item.captureMetadata || {}), ...captureMetadata }, syncStatus: "queued", updatedAt: timestamp });
-      updatedPhotoCount += 1;
-    }
+  let relabeledPhotoCount = 0;
+  for (const [id, edits] of state.mediaEdits) {
+    const item = state.media.find((candidate) => candidate.id === id && candidate.recordId === record.id);
+    if (!item) continue;
+    await putMedia({ ...item, ...edits, syncStatus: item.syncStatus === "queued" ? "queued" : "metadata-queued", updatedAt: timestamp });
+    relabeledPhotoCount += 1;
   }
   for (const item of state.pendingFiles) {
     const file = item.file;
@@ -1124,8 +1062,8 @@ async function saveForm(event) {
   await resetForm();
   await refreshState();
   const conflictMessage = record.syncStatus === "conflict" ? " Choose the device or Cloud version in Records before synchronization can continue." : "";
-  const settingsMessage = updatedPhotoCount ? ` Settings were updated for ${updatedPhotoCount} photograph${updatedPhotoCount === 1 ? "" : "s"}.` : "";
-  toast(`${record.catalogNumber} is saved safely on this device.${conflictMessage}${settingsMessage}`);
+  const labelMessage = relabeledPhotoCount ? ` ${relabeledPhotoCount} photograph label${relabeledPhotoCount === 1 ? " was" : "s were"} updated.` : "";
+  toast(`${record.catalogNumber} is saved safely on this device.${conflictMessage}${labelMessage}`);
   setView("records");
   if (navigator.onLine) syncNow({ quiet: true });
 }
@@ -1144,9 +1082,7 @@ async function resetForm() {
   state.pendingFiles.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
   state.pendingFiles = [];
   state.editingRecordId = null;
-  state.photoOmissions = {};
-  state.viewCaptureSettings = {};
-  renderPhotoProtocol();
+  state.mediaEdits.clear();
   renderMediaPreview();
   updateLocationSuggestions();
 }
@@ -1163,10 +1099,7 @@ async function editRecord(id) {
   $("#form-heading").textContent = `Edit ${record.catalogNumber}`;
   state.pendingFiles = [];
   state.editingRecordId = record.id;
-  state.photoOmissions = { ...(record.photoOmissions || {}) };
-  state.viewCaptureSettings = {};
-  applyWingCondition();
-  renderPhotoProtocol();
+  state.mediaEdits.clear();
   renderMediaPreview();
   updateLocationSuggestions();
   setView("capture");
@@ -1257,27 +1190,47 @@ function renderMediaPreview() {
     ...state.pendingFiles.map((sourceItem, index) => ({ sourceItem, index, stored: false })),
   ];
   host.innerHTML = items.map((item) => {
-    const data = item.sourceItem;
+    const sourceData = item.sourceItem;
+    const data = item.stored ? { ...sourceData, ...(state.mediaEdits.get(sourceData.id) || {}) } : sourceData;
     const blob = item.stored ? data.blob : data.file;
     const fileName = item.stored ? data.fileName : data.file.name;
     const mimeType = item.stored ? data.mimeType : data.file.type;
     const previewable = isDisplayableMime(mimeType || blob?.type);
     if (!data.previewUrl && blob && previewable) data.previewUrl = URL.createObjectURL(blob);
     const source = data.publicUrl || data.previewUrl || "";
-    const label = data.photoLabel || protocolSlot(data.photoType)?.label || "Additional image";
+    const label = imagePartLabel(data);
     const details = [data.orientation ? `${data.orientation} side` : "", captureSummary(data.captureMetadata)].filter(Boolean).join(" · ");
     const removeControl = item.stored
       ? `<button type="button" data-remove-stored-media="${escapeAttribute(data.id)}" aria-label="Remove saved photograph ${escapeAttribute(fileName)}">×</button>`
       : `<button type="button" data-remove-file="${item.index}" aria-label="Remove ${escapeAttribute(fileName)}">×</button>`;
-    return `<figure class="media-thumb">${source ? `<img src="${escapeAttribute(source)}" alt="Preview of ${escapeAttribute(fileName)}">` : `<span class="media-file-fallback">${escapeHtml(fileName)}</span>`}${removeControl}<figcaption>${escapeHtml(label)}${details ? `<span>${escapeHtml(details)}</span>` : ""}</figcaption></figure>`;
+    const selector = item.stored
+      ? `<select data-stored-image-part="${escapeAttribute(data.id)}" aria-label="Insect part or image type for ${escapeAttribute(fileName)}">${imagePartOptionsMarkup(data.photoType)}</select>`
+      : `<select data-pending-image-part="${item.index}" aria-label="Insect part or image type for ${escapeAttribute(fileName)}">${imagePartOptionsMarkup(data.photoType)}</select>`;
+    return `<figure class="media-thumb ${imagePartOption(data.photoType) ? "labeled" : "needs-label"}">${source ? `<img src="${escapeAttribute(source)}" alt="Preview of ${escapeAttribute(fileName)}">` : `<span class="media-file-fallback">${escapeHtml(fileName)}</span>`}${removeControl}<figcaption><strong>${escapeHtml(fileName)}</strong><label>Image shows${selector}</label><span>${escapeHtml(label)}</span>${details ? `<span>${escapeHtml(details)}</span>` : ""}</figcaption></figure>`;
   }).join("");
+  $$('[data-pending-image-part]', host).forEach((select) => select.addEventListener("change", () => {
+    const item = state.pendingFiles[Number(select.dataset.pendingImagePart)];
+    const option = imagePartOption(select.value);
+    if (!item) return;
+    item.photoType = option?.id || "";
+    item.photoLabel = option?.label || "";
+    renderMediaPreview();
+    saveDraft();
+  }));
+  $$('[data-stored-image-part]', host).forEach((select) => select.addEventListener("change", () => {
+    const item = state.media.find((candidate) => candidate.id === select.dataset.storedImagePart);
+    const option = imagePartOption(select.value);
+    if (!item) return;
+    state.mediaEdits.set(item.id, { photoType: option?.id || "", photoLabel: option?.label || "" });
+    renderMediaPreview();
+  }));
   $$('[data-remove-file]', host).forEach((button) => button.addEventListener("click", () => {
     const [removed] = state.pendingFiles.splice(Number(button.dataset.removeFile), 1);
     if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
-    renderPhotoProtocol();
     renderMediaPreview();
   }));
   $$('[data-remove-stored-media]', host).forEach((button) => button.addEventListener("click", () => queueStoredMediaRemoval(button.dataset.removeStoredMedia)));
+  renderPhotoGalleryStatus();
 }
 
 async function queueStoredMediaRemoval(id) {
@@ -1290,7 +1243,6 @@ async function queueStoredMediaRemoval(id) {
     await putMedia({ ...item, syncStatus: "delete-queued", updatedAt: isoNow() });
   }
   state.media = await getMedia();
-  renderPhotoProtocol();
   renderMediaPreview();
   toast(navigator.onLine ? "The photograph is being removed from the device and Cloud archive." : "The photograph will be removed from the Cloud archive when this device reconnects.");
   if (navigator.onLine) syncNow({ quiet: true });
@@ -1375,6 +1327,17 @@ async function syncNow({ quiet = false } = {}) {
       if (!response.ok && response.status !== 404) throw new Error("A photograph could not be removed from the Cloud archive.");
       await removeMedia(item.id);
     }
+    const queuedMetadata = (await getMedia()).filter((item) => item.syncStatus === "metadata-queued");
+    for (const item of queuedMetadata) {
+      const response = await fetch(`/api/media/${encodeURIComponent(item.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ photoType: item.photoType, photoLabel: item.photoLabel, orientation: item.orientation || "", captureMetadata: item.captureMetadata || {} }),
+      });
+      if (!response.ok) throw new Error("An image label could not be updated.");
+      const payload = await response.json();
+      await putMedia({ ...item, ...payload, syncStatus: "synced", syncedAt: isoNow() });
+    }
     const recordsById = new Map((await getRecords()).map((record) => [record.id, record]));
     const queuedMedia = (await getMedia()).filter((item) => item.syncStatus === "queued" && recordsById.get(item.recordId)?.syncStatus !== "conflict");
     for (const item of queuedMedia) {
@@ -1410,7 +1373,7 @@ async function syncNow({ quiet = false } = {}) {
     const localMedia = new Map((await getMedia()).map((item) => [item.id, item]));
     for (const item of cloud.media || []) {
       const local = localMedia.get(item.id);
-      if (!local || local.syncStatus !== "queued") {
+      if (!local || !["queued", "metadata-queued", "delete-queued"].includes(local.syncStatus)) {
         await putMedia({ ...local, ...item, blob: local?.blob, syncStatus: "synced", syncedAt: isoNow() });
       }
     }
@@ -1431,19 +1394,21 @@ async function updateSelectedStatus(status, { overrideReason = "" } = {}) {
   if (!chosen.length) { toast("Select one or more records in the Records view first."); return false; }
   if (chosen.some((record) => record.syncStatus === "conflict")) { toast("Resolve synchronization conflicts before changing publication status."); return false; }
   const reviews = chosen.map((record) => ({ record, review: photoReviewFor(record) }));
-  const missingCore = reviews.reduce((total, item) => total + item.review.missingCore.length, 0);
-  const undocumented = reviews.reduce((total, item) => total + item.review.undocumentedDetails.length, 0);
+  const withoutImages = reviews.filter((item) => !item.review.images.length).length;
+  const unlabeled = reviews.reduce((total, item) => total + item.review.unlabeled.length, 0);
   if (["ready", "published"].includes(status)) {
-    if (missingCore || undocumented) {
+    if (withoutImages || unlabeled) {
       if (status !== "published" || !clean(overrideReason)) {
-        toast(`Photography review incomplete: ${missingCore} baseline view${missingCore === 1 ? "" : "s"} missing and ${undocumented} detail${undocumented === 1 ? "" : "s"} undocumented.`);
+        toast(`Image review incomplete: ${withoutImages} record${withoutImages === 1 ? " has" : "s have"} no images and ${unlabeled} image${unlabeled === 1 ? " needs" : "s need"} a label.`);
         return false;
       }
     }
   }
   const decisionAt = isoNow();
   for (const { record, review } of reviews) {
-    const outstandingViews = [...review.missingCore, ...review.undocumentedDetails].map((slot) => ({ id: slot.id, label: slot.label }));
+    const outstandingViews = !review.images.length
+      ? [{ id: "no-images", label: "No research images attached" }]
+      : review.unlabeled.map((item) => ({ id: item.id, label: item.fileName || "Unlabeled image" }));
     const publicationOverride = status === "published" && outstandingViews.length
       ? { scope: "research-photography", reason: clean(overrideReason), decidedBy: "data-manager", decidedAt: decisionAt, outstandingViews }
       : record.publicationOverride || null;
@@ -1484,10 +1449,10 @@ function exportCsv() {
   const columns = ["occurrenceID", "catalogNumber", "scientificName", "scientificNameAuthorship", "vernacularName", "identifiedBy", "dateIdentified", "identificationRemarks", "eventDate", "country", "stateProvince", "county", "locality", "decimalLatitude", "decimalLongitude", "coordinateUncertaintyInMeters", "recordedBy", "samplingProtocol", "habitat", "sex", "lifeStage", "preparations", "institutionCode", "collectionCode", "rightsHolder", "license", "informationWithheld", "dataGeneralizations", "occurrenceStatus", "basisOfRecord", "associatedMedia", "photographicViews", "photographicOmissions", "photographicCaptureMetadata"];
   const rows = state.records.map((record) => {
     const media = storedMediaFor(record.id);
-    const views = [...new Set(media.map((item) => item.photoLabel || protocolSlot(item.photoType)?.label).filter(Boolean))].join(" | ");
-    const omissions = Object.entries(record.photoOmissions || {}).map(([id, reason]) => `${protocolSlot(id)?.label || id}: ${PHOTO_OMISSION_LABELS[reason] || reason}`).join(" | ");
+    const views = [...new Set(media.map(imagePartLabel).filter(Boolean))].join(" | ");
+    const omissions = Object.entries(record.photoOmissions || {}).map(([id, reason]) => `${imagePartOption(id)?.label || id}: ${String(reason).replaceAll("_", " ")}`).join(" | ");
     const associatedMedia = media.map((item) => item.publicUrl).filter(Boolean).join(" | ");
-    const captureMetadata = JSON.stringify(media.map((item) => ({ fileName: item.fileName, view: item.photoLabel || protocolSlot(item.photoType)?.label || item.photoType, orientation: item.orientation || "", ...(item.captureMetadata || {}) })));
+    const captureMetadata = JSON.stringify(media.map((item) => ({ fileName: item.fileName, view: imagePartLabel(item), orientation: item.orientation || "", ...(item.captureMetadata || {}) })));
     const informationWithheld = record.localityPrivacy === "open" ? "" : "Exact locality and coordinates";
     const dataGeneralizations = record.localityPrivacy === "generalized" ? (record.publicLocality || "Locality generalized to state/province and country") : "";
     return [record.id, record.catalogNumber, record.scientificName, record.scientificNameAuthorship, record.commonName, record.identifiedBy, record.dateIdentified, record.identificationRemarks, record.eventDateStart, record.country, record.stateProvince, record.county, [record.locality, record.site].filter(Boolean).join(" — "), record.latitude, record.longitude, record.coordinateUncertainty, record.collector, record.samplingMethod, record.habitat, record.sex, record.lifeStage, record.preservation, record.institutionCode, record.collectionCode, record.rightsHolder, record.recordLicense, informationWithheld, dataGeneralizations, "present", "PreservedSpecimen", associatedMedia, views, omissions, captureMetadata];
@@ -1497,7 +1462,7 @@ function exportCsv() {
 
 function exportJson() {
   const media = state.media.map(({ blob, ...item }) => item);
-  download(`bhc-field-backup-${today()}.json`, "application/json", JSON.stringify({ format: "BHC Field", version: 2, photoProtocolVersion: 1, exportedAt: isoNow(), records: state.records, media }, null, 2));
+  download(`bhc-field-backup-${today()}.json`, "application/json", JSON.stringify({ format: "BHC Field", version: 3, imageGalleryVersion: 2, exportedAt: isoNow(), records: state.records, media }, null, 2));
 }
 
 async function importJson(file) {
@@ -1515,7 +1480,7 @@ async function importJson(file) {
 function saveDraft() {
   const data = formObject();
   if (!Object.values(data).some((value) => clean(value))) return;
-  localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify({ ...data, __photoOmissions: state.photoOmissions, __viewCaptureSettings: state.viewCaptureSettings }));
+  localStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(data));
 }
 
 function restoreDraft() {
@@ -1523,14 +1488,11 @@ function restoreDraft() {
   if (!raw) return;
   try {
     const draft = JSON.parse(raw);
-    state.photoOmissions = { ...(draft.__photoOmissions || {}) };
-    state.viewCaptureSettings = { ...(draft.__viewCaptureSettings || {}) };
     for (const [key, value] of Object.entries(draft)) {
-      if (["__photoOmissions", "__viewCaptureSettings"].includes(key)) continue;
       const field = $("#record-form").elements.namedItem(key);
       if (field) field.value = value;
     }
-    renderPhotoProtocol();
+    renderMediaPreview();
   } catch { localStorage.removeItem(FORM_DRAFT_KEY); }
 }
 
@@ -1617,7 +1579,6 @@ function bindEvents() {
   $("#record-form").addEventListener("submit", saveForm);
   $("#record-form").addEventListener("input", () => { clearTimeout(saveDraft.timer); saveDraft.timer = setTimeout(saveDraft, 250); });
   ["country", "state-province", "county", "locality", "site"].forEach((id) => $(`#${id}`).addEventListener("input", updateLocationSuggestions));
-  $("#wing-condition").addEventListener("change", applyWingCondition);
   $("#media-files").addEventListener("change", (event) => {
     addPendingFiles([...event.target.files], { captureMetadata: readSupplementalCaptureMetadata() });
     event.target.value = "";

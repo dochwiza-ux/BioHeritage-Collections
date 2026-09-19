@@ -16,7 +16,7 @@
     <title>BHC Field</title>
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/logo.png" type="image/png">
-    <link rel="stylesheet" href="/app.css?v=2.1.3">
+    <link rel="stylesheet" href="/app.css?v=2.2.0">
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -38,7 +38,7 @@
             <span class="status-dot" id="sidebar-dot"></span>
             <div><strong id="sidebar-status">Checking connection</strong><small id="sidebar-detail">Your work stays on this device</small></div>
           </div>
-          <p>Bio-Heritage Collections v2.1.3<br>Secure Cloud archive edition</p>
+          <p>Bio-Heritage Collections v2.2.0<br>Flexible image gallery edition</p>
         </div>
       </aside>
 
@@ -168,18 +168,17 @@
                 </section>
 
                 <section class="form-section span-2 media-section">
-                  <div class="section-number">05</div><div class="section-title"><h2>Research photographs</h2><p>Build a documented anatomical image set, from whole-specimen views to diagnostic details.</p></div>
+                  <div class="section-number">05</div><div class="section-title"><h2>Research photographs</h2><p>Upload the photographs you have, then label what each image shows.</p></div>
                   <div class="photo-workflow">
-                    <div class="photo-protocol-head">
-                      <div><span class="protocol-kicker">Adaptive research protocol</span><h3>Photographic coverage</h3><p>Capture each applicable view. Mark anatomy as hidden, inapplicable or restricted when a photograph cannot or should not be made.</p></div>
-                      <div class="photo-score"><strong id="photo-score">0 / 16</strong><span>documented</span></div>
+                    <div class="photo-gallery-head">
+                      <div><span class="protocol-kicker">Flexible image set</span><h3>Upload what you have</h3><p>One image or many are equally valid. After choosing files, use each image card's dropdown to identify the insect part, whole-specimen view, label or reference shown.</p></div>
+                      <div class="photo-score"><strong id="photo-score">0 images</strong><span>attached</span></div>
                     </div>
-                    <div class="photo-progress" aria-label="Photographic protocol completion"><span id="photo-progress-bar"></span></div>
-                    <div id="photo-protocol-grid" class="photo-protocol-grid"></div>
-
-                    <div id="media-preview" class="media-preview"></div>
+                    <p id="photo-gallery-summary" class="photo-gallery-summary" aria-live="polite">Add any number of photographs, then identify each one from its dropdown.</p>
+                    <label class="drop-zone supplemental" for="media-files"><input id="media-files" type="file" accept="image/*,.tif,.tiff,.dng,.nef,.cr2,.arw" multiple><span class="drop-icon">+</span><strong>Add photographs</strong><small>Select one or many images · up to 100 MB each</small></label>
+                    <div id="media-preview" class="media-preview flexible-gallery"></div>
                     <details class="capture-metadata supplemental-capture">
-                      <summary>Settings for the additional image <span>Applied only to the next additional upload</span></summary>
+                      <summary>Optional capture settings <span>Applied to the next files you add</span></summary>
                       <div class="fields three-col">
                         <label>Capture type<select id="supplemental-capture-mode"><option value="single">Single frame</option><option value="macro-single">Macro — single frame</option><option value="focus-stack">Focus stack</option><option value="macro-stack">Macro — focus stack</option><option value="microscope">Microscope image</option></select></label>
                         <label>Camera body<input id="supplemental-camera" placeholder="e.g. Nikon D3300"></label>
@@ -198,7 +197,6 @@
                         <label>Image notes<textarea id="supplemental-notes" rows="3"></textarea></label>
                       </div>
                     </details>
-                    <label class="drop-zone supplemental" for="media-files"><input id="media-files" type="file" accept="image/*,.tif,.tiff,.dng,.nef,.cr2,.arw" multiple><span class="drop-icon">+</span><strong>Add an additional image</strong><small>For labels, scales or another useful view · up to 100 MB each</small></label>
                   </div>
                 </section>
 
@@ -231,10 +229,10 @@
             <div class="page-heading"><div><p class="eyebrow">Cloud catalogue</p><h1>Review, export, publish</h1><p>Publishing never deletes the offline copy. It marks approved records for the public catalogue and synchronizes them to Cloudflare.</p></div></div>
             <div class="publish-grid">
               <section class="panel publish-hero"><p class="eyebrow">Release gate</p><h2 id="publish-count">0 records ready</h2><p>Select records in the archive, confirm that sensitive locality data has been generalized where needed, then release them.</p><div class="publish-actions"><button class="button primary" id="publish-selected">Publish selected records</button><button class="button secondary" id="mark-ready">Mark selected ready</button></div></section>
-              <section class="panel checklist"><h2>Before publishing</h2><label><input type="checkbox" id="check-identification"> Identification has been reviewed</label><label><input type="checkbox" id="check-locality"> Sensitive locality has been considered</label><label><input type="checkbox" id="check-photography"> Research-photo coverage has been reviewed</label><p id="photo-review-summary" class="check-note">Select records to review photographic coverage.</p><label><input type="checkbox" id="check-media"> Image rights and credit are recorded</label></section>
+              <section class="panel checklist"><h2>Before publishing</h2><label><input type="checkbox" id="check-identification"> Identification has been reviewed</label><label><input type="checkbox" id="check-locality"> Sensitive locality has been considered</label><label><input type="checkbox" id="check-photography"> Images and their labels have been reviewed</label><p id="photo-review-summary" class="check-note">Select records to review their image labels.</p><label><input type="checkbox" id="check-media"> Image rights and credit are recorded</label></section>
               <section class="panel override-panel" id="photo-override-box" hidden>
-                <div><p class="eyebrow">Data-manager decision</p><h2>Exceptional publication override</h2><p>Use only when incomplete photographic coverage is understood and the record remains valuable to publish.</p></div>
-                <div class="override-controls"><label class="override-check"><input type="checkbox" id="check-photo-override"> Publish despite the documented photography gaps</label><label>Reason for override<textarea id="photo-override-reason" rows="3" placeholder="Explain why publication is appropriate and what remains incomplete" disabled></textarea></label><small>The reason, date and outstanding views will be retained with the management record.</small></div>
+                <div><p class="eyebrow">Data-manager decision</p><h2>Exceptional publication override</h2><p>Use only when a record without a complete, labeled image set remains valuable to publish.</p></div>
+                <div class="override-controls"><label class="override-check"><input type="checkbox" id="check-photo-override"> Publish despite missing images or labels</label><label>Reason for override<textarea id="photo-override-reason" rows="3" placeholder="Explain why publication is appropriate and what remains incomplete" disabled></textarea></label><small>The reason, date and outstanding image issues will be retained with the management record.</small></div>
               </section>
             </div>
             <div class="export-grid"><article><span>DWCA-READY CSV</span><h3>Occurrence export</h3><p>Darwin Core-style columns for GBIF preparation and external analysis.</p><button class="button secondary" id="export-csv">Download CSV</button></article><article><span>FULL BACKUP</span><h3>Device archive</h3><p>Records and metadata in a portable JSON file.</p><button class="button secondary" id="export-json">Download backup</button></article><article><span>RESTORE</span><h3>Import backup</h3><p>Merge a BHC Field JSON backup into this device.</p><label class="button secondary file-button">Choose backup<input id="import-json" type="file" accept="application/json"></label></article></div>
@@ -349,6 +347,6 @@
       </div>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="/app.js?v=2.1.3"></script>
+    <script type="module" src="/app.js?v=2.2.0"></script>
   </body>
 </html>
